@@ -1,69 +1,62 @@
-import Image from "next/image";
+import Link from "next/link";
+
+const steps = [
+  { n: "1", title: "Add your website", text: "Tadaa reads it and learns your brand: what you sell, how you talk, your colours and logo." },
+  { n: "2", title: "Upload a photo or clip", text: "Shot on your phone in a minute. Or skip it – Tadaa can work from your brand alone." },
+  { n: "3", title: "Get a finished Reel", text: "Hook, on-screen text, caption and hashtags, in your brand. Ask for changes in plain words." },
+  { n: "4", title: "Approve and post", text: "Nothing goes out without your OK. Download the video and post it in seconds." },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div>
+      <section className="mx-auto max-w-6xl px-4 pt-16 pb-20 grid md:grid-cols-2 gap-12 items-center">
+        <div>
+          <p className="inline-block rounded-full bg-sun/20 text-ink px-3 py-1 text-xs font-bold uppercase tracking-wider mb-5">
+            Reels for busy businesses
           </p>
+          <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-[1.02]">
+            Snap a photo.
+            <br />
+            Get an on-brand Reel.
+            <br />
+            <span className="text-coral">Tadaa!</span>
+          </h1>
+          <p className="mt-6 text-lg text-ink/70 max-w-md">
+            Tadaa turns your photos into scroll-stopping Reels in your brand&apos;s look and voice – in English, Swedish, Spanish, German or French.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/onboarding" className="btn-primary text-base px-7 py-3">
+              Make my first Reel – free
+            </Link>
+            <Link href="/brands" className="btn-ghost text-base px-7 py-3">
+              Open my brands
+            </Link>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="relative mx-auto">
+          <div className="w-[260px] aspect-[9/16] rounded-[32px] bg-gradient-to-b from-coral to-sun p-6 flex flex-col justify-between shadow-2xl rotate-2">
+            <span className="self-start rounded-lg bg-white/90 px-3 py-1 text-xs font-black tracking-widest">AFTER</span>
+            <p className="text-white font-black text-3xl leading-tight drop-shadow">Wait for the after 👀</p>
+            <p className="text-white/90 text-sm font-semibold">Your café · Book today</p>
+          </div>
+          <div className="absolute -left-16 top-16 w-[180px] aspect-[9/16] rounded-[26px] bg-ink p-5 flex flex-col justify-end shadow-xl -rotate-6">
+            <p className="text-white font-black text-xl leading-tight">3 things our customers always ask</p>
+          </div>
         </div>
-      </main>
+      </section>
+
+      <section className="bg-white border-y border-black/5">
+        <div className="mx-auto max-w-6xl px-4 py-16 grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {steps.map((s) => (
+            <div key={s.n}>
+              <div className="h-9 w-9 rounded-full bg-coral text-white grid place-items-center font-black">{s.n}</div>
+              <h3 className="mt-4 font-bold text-lg">{s.title}</h3>
+              <p className="mt-1.5 text-sm text-ink/65">{s.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

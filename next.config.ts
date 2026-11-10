@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Remotion's renderer runs in a separate process (scripts/render.mjs); keep it out of server bundles.
+  serverExternalPackages: ["@remotion/renderer", "@remotion/bundler"],
   turbopack: {
     rules: {
       "*.css": {

@@ -221,7 +221,7 @@ function mockScript(brand: Brand, topic: string, template: TemplateId, media: Me
     slides,
     cta: "Follow for more",
     caption: `${topic} ✨\n${brand.description}`,
-    hashtags: ["#smallbusiness", "#local", `#${brand.name.replace(/[^a-z0-9]/gi, "").toLowerCase()}`],
+    hashtags: ["#smallbusiness", "#local", `#${brand.name.normalize("NFD").replace(/[^a-z0-9]/gi, "").toLowerCase()}`],
   };
 }
 
