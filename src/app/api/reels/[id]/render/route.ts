@@ -19,7 +19,11 @@ function runRender(propsFile: string, outFile: string) {
     let log = "";
     child.stdout.on("data", (d) => (log += d));
     child.stderr.on("data", (d) => (log += d));
-    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(log.split("\n").slice(-8).join("\n")))));
+    child.on("close", (code) => {
+      if (code === 0) return resolve();
+      console.error(`[render] failed with code ${code}\n${log}`);
+      reject(new Error(log.split("\n").filter(Boolean).slice(-15).join("\n")));
+    });
   });
 }
 

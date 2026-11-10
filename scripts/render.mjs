@@ -13,19 +13,25 @@ if (!propsFile || !outFile) {
 }
 
 const root = process.cwd();
-const bundleDir = path.join(process.env.TADAA_DATA_DIR || path.join(root, "data"), ".remotion-bundle");
 const inputProps = JSON.parse(readFileSync(propsFile, "utf8"));
 
+// Browser: an explicit path wins; otherwise Remotion's own headless shell (installed in the Docker image),
+// falling back to a system Chrome for local development.
 const browserExecutable =
   process.env.REMOTION_BROWSER ||
-  ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"].find((p) => existsSync(p)) ||
+  (existsSync(path.join(root, "node_modules/.remotion")) ? null : ["/usr/bin/google-chrome", "/usr/bin/chromium"].find((p) => existsSync(p))) ||
   null;
 
-// Reuse the bundle between renders; set TADAA_REBUNDLE=1 after changing templates.
-const serveUrl =
-  existsSync(path.join(bundleDir, "index.html")) && !process.env.TADAA_REBUNDLE
-    ? bundleDir
-    : await bundle({ entryPoint: path.join(root, "src/remotion/index.ts"), outDir: bundleDir });
+// Bundle: use the one built at deploy time (scripts/bundle.mjs) if present, else build and cache one.
+const prebuilt = path.join(root, "remotion-bundle");
+const cacheDir = path.join(process.env.TADAA_DATA_DIR || path.join(root, "data"), ".remotion-bundle");
+let serveUrl;
+if (existsSync(path.join(prebuilt, "index.html"))) serveUrl = prebuilt;
+else if (existsSync(path.join(cacheDir, "index.html")) && !process.env.TADAA_REBUNDLE) serveUrl = cacheDir;
+else serveUrl = await bundle({ entryPoint: path.join(root, "src/remotion/index.ts"), outDir: cacheDir });
+
+const concurrency = Number(process.env.TADAA_RENDER_CONCURRENCY || 1);
+console.log(`render start browser=${browserExecutable ?? "remotion-headless-shell"} bundle=${serveUrl} concurrency=${concurrency}`);
 
 const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable });
 
@@ -37,6 +43,7 @@ await renderMedia({
   outputLocation: outFile,
   inputProps,
   browserExecutable,
+  concurrency,
   chromiumOptions: { gl: "swangle" },
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 100);
