@@ -33,7 +33,10 @@ else serveUrl = await bundle({ entryPoint: path.join(root, "src/remotion/index.t
 const concurrency = Number(process.env.TADAA_RENDER_CONCURRENCY || 1);
 console.log(`render start browser=${browserExecutable ?? "remotion-headless-shell"} bundle=${serveUrl} concurrency=${concurrency}`);
 
-const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable });
+const timeoutInMilliseconds = Number(process.env.TADAA_RENDER_TIMEOUT_MS || 120000);
+const t0 = Date.now();
+const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable, timeoutInMilliseconds });
+console.log(`composition ready after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 let last = -1;
 await renderMedia({
@@ -44,12 +47,13 @@ await renderMedia({
   inputProps,
   browserExecutable,
   concurrency,
+  timeoutInMilliseconds,
   chromiumOptions: { gl: "swangle" },
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 100);
     if (pct % 10 === 0 && pct !== last) {
       last = pct;
-      console.log(`progress ${pct}%`);
+      console.log(`progress ${pct}% after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     }
   },
 });
