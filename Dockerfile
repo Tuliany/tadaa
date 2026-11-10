@@ -1,4 +1,5 @@
-# One container runs the web app and renders MP4s. Mount a volume at /data.
+# One container runs the web app and renders MP4s.
+# Attach a persistent volume at /data in your host (Railway: service → Settings → Volumes).
 FROM node:22-bookworm-slim
 
 # Chromium + fonts for Remotion rendering
@@ -17,5 +18,4 @@ ENV NODE_ENV=production \
     REMOTION_BROWSER=/usr/bin/chromium \
     PORT=3000
 EXPOSE 3000
-VOLUME ["/data"]
 CMD ["npm", "start"]
