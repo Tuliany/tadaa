@@ -198,7 +198,7 @@ Media: ${media.map((m, i) => `${i}: ${m.kind} "${m.fileName}"`).join(", ") || "n
 
 Owner's change request: "${request}"
 
-Return the full revised script with the same schema.`,
+Return the full revised script with the same schema. Keep the length limits: hook max 8 words, slides max 14 words, CTA max 6 words.`,
     scriptSchema,
   );
   return toScript(script.template, raw, media);

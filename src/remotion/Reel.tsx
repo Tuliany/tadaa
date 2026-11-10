@@ -89,7 +89,7 @@ function Hook({ props }: { props: ReelRenderProps }) {
       <MediaLayer media={first} zoomFrom={1.2} zoomTo={1.08} />
       {first && <Shade strength={0.6} />}
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: 80 }}>
-        <PopText size={104} color="#ffffff">
+        <PopText size={script.hook.length > 60 ? 76 : script.hook.length > 35 ? 90 : 104} color="#ffffff">
           {script.hook}
         </PopText>
       </AbsoluteFill>
