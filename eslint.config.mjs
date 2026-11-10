@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Local uploads, renders and the cached Remotion bundle.
     "data/**",
+    "remotion-bundle/**",
   ]),
 ]);
 
