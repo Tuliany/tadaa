@@ -31,11 +31,17 @@ else if (existsSync(path.join(cacheDir, "index.html")) && !process.env.TADAA_REB
 else serveUrl = await bundle({ entryPoint: path.join(root, "src/remotion/index.ts"), outDir: cacheDir });
 
 const concurrency = Number(process.env.TADAA_RENDER_CONCURRENCY || 1);
-console.log(`render start browser=${browserExecutable ?? "remotion-headless-shell"} bundle=${serveUrl} concurrency=${concurrency}`);
+// Tunables so a host can switch Chrome setups with env vars, without a rebuild.
+const chromeMode = process.env.TADAA_CHROME_MODE || (browserExecutable ? "chrome-for-testing" : "headless-shell");
+const gl = process.env.TADAA_RENDER_GL || "swangle";
+const chromiumOptions = { gl };
+// e.g. 0.75 renders 810x1440 and 0.5 renders 540x960 instead of 1080x1920 – lighter on small servers.
+const scale = Number(process.env.TADAA_RENDER_SCALE || 1);
+console.log(`render start browser=${browserExecutable ?? "remotion-headless-shell"} mode=${chromeMode} gl=${gl} bundle=${serveUrl} concurrency=${concurrency} scale=${scale}`);
 
 const timeoutInMilliseconds = Number(process.env.TADAA_RENDER_TIMEOUT_MS || 120000);
 const t0 = Date.now();
-const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable, timeoutInMilliseconds });
+const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable, chromeMode, chromiumOptions, timeoutInMilliseconds });
 console.log(`composition ready after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 let last = -1;
@@ -48,7 +54,9 @@ await renderMedia({
   browserExecutable,
   concurrency,
   timeoutInMilliseconds,
-  chromiumOptions: { gl: "swangle" },
+  chromeMode,
+  chromiumOptions,
+  scale,
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 100);
     if (pct % 10 === 0 && pct !== last) {
