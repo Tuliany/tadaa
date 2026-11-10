@@ -9,9 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.7.0",
+    "@remotion/bundler": "^4.0.542",
+    "@remotion/player": "^4.0.542",
+    "@remotion/renderer": "^4.0.542",
+    "cheerio": "^1.2.0",
+    "nanoid": "^6.0.2",
     "next": "16.4.6",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "remotion": "^4.0.542",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
