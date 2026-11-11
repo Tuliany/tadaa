@@ -30,6 +30,12 @@ export interface Session {
   expiresAt: string;
 }
 
+export interface PasswordReset {
+  tokenHash: string;
+  userId: string;
+  expiresAt: string;
+}
+
 export interface Brand {
   id: string;
   ownerId: string;

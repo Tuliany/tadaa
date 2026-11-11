@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brand, MediaItem, Plan, Reel, Session, User } from "./types";
+import type { Brand, MediaItem, PasswordReset, Plan, Reel, Session, User } from "./types";
 
 /**
  * Local JSON-file store for development and demos.
@@ -14,13 +14,14 @@ const DB_FILE = path.join(DATA_DIR, "db.json");
 interface DB {
   users: User[];
   sessions: Session[];
+  resets: PasswordReset[];
   brands: Brand[];
   media: MediaItem[];
   reels: Reel[];
   plans: Plan[];
 }
 
-const empty: DB = { users: [], sessions: [], brands: [], media: [], reels: [], plans: [] };
+const empty: DB = { users: [], sessions: [], resets: [], brands: [], media: [], reels: [], plans: [] };
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -68,6 +69,28 @@ export function createUser(user: User) {
     return user;
   });
 }
+export function setPassword(userId: string, passwordHash: string) {
+  return mutate((db) => {
+    const u = db.users.find((x) => x.id === userId);
+    if (!u) throw new Error("NO_USER");
+    u.passwordHash = passwordHash;
+    // Log out everywhere and burn any other reset links.
+    db.sessions = db.sessions.filter((s) => s.userId !== userId);
+    db.resets = db.resets.filter((r) => r.userId !== userId);
+  });
+}
+export function saveReset(reset: PasswordReset) {
+  return mutate((db) => {
+    const now = new Date().toISOString();
+    db.resets = db.resets.filter((r) => r.expiresAt > now && r.userId !== reset.userId);
+    db.resets.push(reset);
+  });
+}
+export async function getReset(tokenHash: string) {
+  const r = (await read()).resets.find((x) => x.tokenHash === tokenHash);
+  return r && r.expiresAt > new Date().toISOString() ? r : null;
+}
+
 export function saveSession(session: Session) {
   return mutate((db) => {
     const now = new Date().toISOString();

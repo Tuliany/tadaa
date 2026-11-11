@@ -58,7 +58,11 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {mode === "signup" && <p className="text-xs text-ink/45 mt-1">At least 8 characters</p>}
+          {mode === "signup" ? (
+            <p className="text-xs text-ink/45 mt-1">At least 8 characters</p>
+          ) : (
+            <Link href="/forgot-password" className="mt-1.5 inline-block text-xs font-semibold text-coral">Forgot password?</Link>
+          )}
         </div>
         {error && <p className="rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
         <button className="btn-primary w-full py-3 text-base" disabled={busy}>
