@@ -3,18 +3,15 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 
-/**
- * Official logo files go in /public/logos/<slug>.png (or .svg) – use each brand's own asset, unmodified.
- * Until a file exists the emoji is shown.
- */
+/** Official logo files in /public/logos – each brand's own asset, unmodified. Brands without one show their emoji. */
+const LOGOS = new Set(["claude", "instagram", "facebook", "linkedin", "google-drive"]);
+
 function Logo({ slug, emoji }: { slug: string; emoji: string }) {
-  const sources = [`/logos/${slug}.svg`, `/logos/${slug}.png`];
-  const [i, setI] = useState(0);
   return (
     <span className="h-11 w-11 rounded-xl bg-cream grid place-items-center text-2xl overflow-hidden">
-      {i < sources.length ? (
+      {LOGOS.has(slug) ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={sources[i]} alt="" className="h-7 w-7 object-contain" onError={() => setI(i + 1)} />
+        <img src={`/logos/${slug}.png`} alt="" className="h-7 w-7 object-contain" />
       ) : (
         emoji
       )}
