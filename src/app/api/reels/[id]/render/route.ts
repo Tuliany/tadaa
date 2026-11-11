@@ -22,13 +22,15 @@ function runRender(propsFile: string, outFile: string) {
     child.on("close", (code) => {
       if (code === 0) return resolve();
       console.error(`[render] failed with code ${code}\n${log}`);
-      reject(new Error(log.split("\n").filter(Boolean).slice(-15).join("\n")));
+      const lines = log.split("\n").filter(Boolean);
+      const reason = lines.find((l) => /^(\w*Error|Error)[:\s]/.test(l.trim())) ?? lines.at(-1) ?? `exit code ${code}`;
+      reject(new Error(reason.trim().slice(0, 300)));
     });
   });
 }
 
 /** Renders the Reel to MP4 (or returns the cached render) and responds with its download URL. */
-export async function POST(req: Request, ctx: RouteContext<"/api/reels/[id]/render">) {
+export async function POST(_req: Request, ctx: RouteContext<"/api/reels/[id]/render">) {
   const { id } = await ctx.params;
   const reel = await getReel(id);
   if (!reel) return Response.json({ error: "Not found" }, { status: 404 });
@@ -49,7 +51,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reels/[id]/rend
   if (!job) {
     job = (async () => {
       const media = await listMedia(brand.id);
-      const origin = process.env.TADAA_RENDER_ORIGIN || new URL(req.url).origin;
+      // The renderer runs in this container, so load media over loopback rather than the public URL.
+      const origin = process.env.TADAA_RENDER_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3000}`;
       const props = toRenderProps(brand, reel, media, origin);
       await fs.mkdir(RENDER_DIR, { recursive: true });
       const propsFile = path.join(os.tmpdir(), `tadaa-${id}-${Date.now()}.json`);
@@ -71,6 +74,6 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reels/[id]/rend
     await job;
     return Response.json({ url: `/api/reels/${id}/download` });
   } catch (e) {
-    return Response.json({ error: `Render failed: ${(e as Error).message}` }, { status: 500 });
+    return Response.json({ error: `The video couldn't be created. Please try again in a minute. (${(e as Error).message})` }, { status: 500 });
   }
 }

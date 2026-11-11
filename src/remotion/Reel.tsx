@@ -11,6 +11,10 @@ import {
 } from "remotion";
 import type { ReelRenderProps, Slide } from "../lib/types";
 import { CTA_FRAMES, HOOK_FRAMES, SLIDE_FRAMES } from "../lib/templates";
+import { readableOn, textOn } from "../lib/color";
+
+// A missing or broken image must never cancel a whole render – just leave that layer empty.
+const ignoreImageError = () => {};
 
 const FONT = "'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
@@ -24,7 +28,7 @@ function MediaLayer({ media, zoomFrom = 1.05, zoomTo = 1.15 }: { media?: Media; 
   const style: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover", transform: `scale(${scale})` };
   return (
     <AbsoluteFill>
-      {media.kind === "video" ? <OffthreadVideo src={media.url} muted style={style} /> : <Img src={media.url} style={style} />}
+      {media.kind === "video" ? <OffthreadVideo src={media.url} muted style={style} /> : <Img src={media.url} style={style} onError={ignoreImageError} />}
     </AbsoluteFill>
   );
 }
@@ -72,7 +76,7 @@ function PopText({
         borderRadius: bg ? 22 : 0,
         boxDecorationBreak: "clone",
         WebkitBoxDecorationBreak: "clone",
-        textShadow: bg ? "none" : "0 4px 24px rgba(0,0,0,0.55)",
+        textShadow: bg || color !== "#ffffff" ? "none" : "0 4px 24px rgba(0,0,0,0.55)",
         maxWidth: 920,
       }}
     >
@@ -89,7 +93,7 @@ function Hook({ props }: { props: ReelRenderProps }) {
       <MediaLayer media={first} zoomFrom={1.2} zoomTo={1.08} />
       {first && <Shade strength={0.6} />}
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", padding: 80 }}>
-        <PopText size={script.hook.length > 60 ? 76 : script.hook.length > 35 ? 90 : 104} color="#ffffff">
+        <PopText size={script.hook.length > 60 ? 76 : script.hook.length > 35 ? 90 : 104} color={first ? "#ffffff" : readableOn(brand.colors.background)}>
           {script.hook}
         </PopText>
       </AbsoluteFill>
@@ -101,8 +105,12 @@ function SlideCard({ slide, index, props }: { slide: Slide; index: number; props
   const { brand, media, script } = props;
   const m = media.find((x) => x.id === slide.mediaId);
   const isTips = script.template === "tips";
+  const bg = index % 2 ? brand.colors.secondary : brand.colors.primary;
+  // Text sits on the photo (shaded → white), on a brand-colour pill, or straight on the brand colour.
+  const onPill = !isTips && !!m;
+  const color = onPill ? textOn(brand.colors.primary, brand.colors.text) : m ? "#ffffff" : readableOn(bg);
   return (
-    <AbsoluteFill style={{ backgroundColor: index % 2 ? brand.colors.secondary : brand.colors.primary }}>
+    <AbsoluteFill style={{ backgroundColor: bg }}>
       <MediaLayer media={m} zoomFrom={index % 2 ? 1.15 : 1.05} zoomTo={index % 2 ? 1.05 : 1.15} />
       {m && <Shade strength={isTips ? 0.7 : 0.5} />}
       <AbsoluteFill
@@ -112,7 +120,7 @@ function SlideCard({ slide, index, props }: { slide: Slide; index: number; props
           padding: isTips ? 90 : "0 70px 260px",
         }}
       >
-        <PopText size={isTips ? 90 : 72} color={isTips || !m ? "#ffffff" : brand.colors.text} bg={isTips || !m ? undefined : brand.colors.primary}>
+        <PopText size={isTips ? 90 : 72} color={color} bg={onPill ? brand.colors.primary : undefined}>
           {slide.text}
         </PopText>
       </AbsoluteFill>
@@ -138,7 +146,7 @@ function BeforeAfter({ props }: { props: ReelRenderProps }) {
         fontWeight: 900,
         fontSize: 64,
         letterSpacing: 6,
-        color: "#fff",
+        color: readableOn(brand.colors.primary),
         background: brand.colors.primary,
         padding: "12px 28px",
         borderRadius: 16,
@@ -179,6 +187,7 @@ function EndCard({ props }: { props: ReelRenderProps }) {
   const { fps } = useVideoConfig();
   const { brand, script } = props;
   const s = spring({ frame, fps, config: { damping: 12 } });
+  const fg = readableOn(brand.colors.primary);
   return (
     <AbsoluteFill
       style={{
@@ -191,16 +200,16 @@ function EndCard({ props }: { props: ReelRenderProps }) {
     >
       {brand.logoUrl ? (
         <div style={{ background: "#fff", borderRadius: 40, padding: 36, transform: `scale(${s})`, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-          <Img src={brand.logoUrl} style={{ width: 300, height: 300, objectFit: "contain" }} />
+          <Img src={brand.logoUrl} style={{ width: 300, height: 300, objectFit: "contain" }} onError={ignoreImageError} />
         </div>
       ) : (
-        <div style={{ fontFamily: FONT, fontWeight: 900, fontSize: 110, color: "#fff", transform: `scale(${s})`, textAlign: "center" }}>{brand.name}</div>
+        <div style={{ fontFamily: FONT, fontWeight: 900, fontSize: 110, color: fg, transform: `scale(${s})`, textAlign: "center" }}>{brand.name}</div>
       )}
-      <PopText size={76} color="#fff" delay={8}>
+      <PopText size={76} color={fg} delay={8}>
         {script.cta}
       </PopText>
       {brand.logoUrl && (
-        <PopText size={48} color="rgba(255,255,255,0.85)" delay={14}>
+        <PopText size={48} color={fg} delay={14}>
           {brand.name}
         </PopText>
       )}
