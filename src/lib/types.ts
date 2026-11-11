@@ -15,9 +15,26 @@ export interface BrandColors {
   background: string;
 }
 
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  createdAt: string;
+}
+
+export interface Session {
+  /** sha256 of the cookie token – the raw token is never stored. */
+  tokenHash: string;
+  userId: string;
+  expiresAt: string;
+}
+
 export interface Brand {
   id: string;
+  ownerId: string;
   name: string;
+  headline?: string;
   website?: string;
   instagram?: string;
   industry: string;
@@ -29,6 +46,8 @@ export interface Brand {
   colors: BrandColors;
   logoUrl?: string;
   language: Language;
+  /** Example Reels the owner wants to resemble (links). */
+  referenceReels: string[];
   createdAt: string;
 }
 

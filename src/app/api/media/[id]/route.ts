@@ -1,12 +1,12 @@
 import { createReadStream, promises as fs } from "fs";
 import { Readable } from "stream";
-import { getMedia } from "@/lib/db";
+import { canReadMedia } from "@/lib/auth";
 import { uploadPath } from "@/lib/storage";
 
 /** Serves uploaded media with HTTP range support so videos can seek. */
 export async function GET(req: Request, ctx: RouteContext<"/api/media/[id]">) {
   const { id } = await ctx.params;
-  const item = await getMedia(id);
+  const item = await canReadMedia(id, new URL(req.url).searchParams.get("rt"));
   if (!item) return new Response("Not found", { status: 404 });
 
   const file = uploadPath(item.fileName);

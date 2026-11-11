@@ -28,7 +28,7 @@ function EditBrand() {
     api<Brand>(`/api/brands/${id}`).then(setBrand).catch((e) => setError(e.message));
   }, [id]);
 
-  if (!brand) return <p className="mx-auto max-w-3xl px-4 py-12 text-ink/50">{error || "Loading…"}</p>;
+  if (!brand) return <p className="text-ink/50">{error || "Loading…"}</p>;
 
   const set = <K extends keyof Brand>(key: K, value: Brand[K]) => setBrand({ ...brand, [key]: value });
 
@@ -46,7 +46,12 @@ function EditBrand() {
     try {
       await api(`/api/brands/${id}`, {
         method: "PUT",
-        json: { ...brand, offers: brand.offers.filter(Boolean), claimsToAvoid: brand.claimsToAvoid.filter(Boolean) },
+        json: {
+          ...brand,
+          offers: brand.offers.filter(Boolean),
+          claimsToAvoid: brand.claimsToAvoid.filter(Boolean),
+          referenceReels: (brand.referenceReels ?? []).map((r) => r.trim()).filter(Boolean),
+        },
       });
       router.push(`/brands/${id}`);
     } catch (e) {
@@ -56,7 +61,7 @@ function EditBrand() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
+    <div className="max-w-3xl">
       {params.get("welcome") && (
         <div className="mb-6 rounded-2xl bg-sun/20 px-5 py-4">
           <p className="font-bold">Here&apos;s your brand profile 🎉</p>
@@ -65,7 +70,8 @@ function EditBrand() {
       )}
       {params.get("warning") && <p className="mb-6 rounded-xl bg-orange-50 text-orange-800 text-sm px-4 py-3">{params.get("warning")}</p>}
 
-      <h1 className="text-3xl font-black tracking-tight">Brand profile</h1>
+      <h1 className="text-3xl font-black tracking-tight">Brand Brain</h1>
+      <p className="mt-1 text-ink/60">Tadaa follows this for every Reel.</p>
 
       <div className="card mt-6 p-6 space-y-5">
         <div className="grid sm:grid-cols-2 gap-4">
@@ -110,6 +116,12 @@ function EditBrand() {
             <input className="input" value={brand.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} />
           </div>
         </div>
+        <ListField
+          label="Reels you like"
+          value={brand.referenceReels ?? []}
+          onChange={(v) => set("referenceReels", v)}
+          hint="One link per line – style references for your content"
+        />
       </div>
 
       <div className="card mt-6 p-6">

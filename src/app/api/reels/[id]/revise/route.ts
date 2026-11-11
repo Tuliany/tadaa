@@ -1,16 +1,15 @@
 import { reviseReelScript } from "@/lib/ai";
-import { getBrand, getReel, listMedia, saveReel } from "@/lib/db";
+import { handle, HttpError, requireReel } from "@/lib/auth";
+import { listMedia, saveReel } from "@/lib/db";
+
+export const maxDuration = 60;
 
 /** Apply a plain-language change request ("make the hook funnier") to a Reel. */
-export async function POST(req: Request, ctx: RouteContext<"/api/reels/[id]/revise">) {
-  const { id } = await ctx.params;
-  const reel = await getReel(id);
-  if (!reel) return Response.json({ error: "Not found" }, { status: 404 });
-  const brand = await getBrand(reel.brandId);
-  if (!brand) return Response.json({ error: "Brand not found" }, { status: 404 });
+export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[id]/revise">) => {
+  const { reel, brand } = await requireReel((await ctx.params).id);
 
   const { request } = (await req.json()) as { request?: string };
-  if (!request?.trim()) return Response.json({ error: "Describe the change you want." }, { status: 400 });
+  if (!request?.trim()) throw new HttpError(400, "Describe the change you want.");
 
   const all = await listMedia(brand.id);
   const media = reel.mediaIds.map((mid) => all.find((m) => m.id === mid)).filter((m) => !!m);
@@ -28,6 +27,6 @@ export async function POST(req: Request, ctx: RouteContext<"/api/reels/[id]/revi
     await saveReel(next);
     return Response.json(next);
   } catch (e) {
-    return Response.json({ error: `Could not apply the change: ${(e as Error).message}` }, { status: 502 });
+    throw new HttpError(502, `Could not apply the change: ${(e as Error).message}`);
   }
-}
+});

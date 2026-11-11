@@ -1,28 +1,30 @@
 import { nanoid } from "nanoid";
 import { writeReelScript } from "@/lib/ai";
-import { getBrand, listMedia, listReels, saveReel } from "@/lib/db";
+import { handle, HttpError, requireBrand } from "@/lib/auth";
+import { listMedia, listReels, saveReel } from "@/lib/db";
 import { TEMPLATES } from "@/lib/templates";
 import type { Reel, TemplateId } from "@/lib/types";
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/brands/[id]/reels">) {
-  const { id } = await ctx.params;
-  return Response.json(await listReels(id));
-}
+export const maxDuration = 60;
 
-export async function POST(req: Request, ctx: RouteContext<"/api/brands/[id]/reels">) {
-  const { id } = await ctx.params;
-  const brand = await getBrand(id);
-  if (!brand) return Response.json({ error: "Brand not found" }, { status: 404 });
+export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[id]/reels">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
+  return Response.json(await listReels(brand.id));
+});
+
+export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[id]/reels">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
+  const id = brand.id;
 
   const body = (await req.json()) as { topic?: string; template?: TemplateId; mediaIds?: string[] };
   const topic = body.topic?.trim();
-  if (!topic) return Response.json({ error: "Tell us what this Reel is about." }, { status: 400 });
+  if (!topic) throw new HttpError(400, "Tell us what this Reel is about.");
   const template: TemplateId = body.template && body.template in TEMPLATES ? body.template : "showcase";
 
   const all = await listMedia(id);
   const media = (body.mediaIds ?? []).map((mid) => all.find((m) => m.id === mid)).filter((m) => !!m);
   if (template === "beforeAfter" && media.length < 2) {
-    return Response.json({ error: "Before & After needs two photos: the before first, then the after." }, { status: 400 });
+    throw new HttpError(400, "Before & After needs two photos: the before first, then the after.");
   }
 
   try {
@@ -42,6 +44,6 @@ export async function POST(req: Request, ctx: RouteContext<"/api/brands/[id]/ree
     await saveReel(reel);
     return Response.json(reel);
   } catch (e) {
-    return Response.json({ error: `Could not write the Reel: ${(e as Error).message}` }, { status: 502 });
+    throw new HttpError(502, `Could not write the Reel: ${(e as Error).message}`);
   }
-}
+});

@@ -33,10 +33,10 @@ export default function BrandDashboard() {
     }
   }
 
-  if (!brand) return <p className="mx-auto max-w-6xl px-4 py-12 text-ink/50">{error || "Loading…"}</p>;
+  if (!brand) return <p className="text-ink/50">{error || "Loading…"}</p>;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="h-14 w-14 rounded-2xl" style={{ background: `linear-gradient(135deg, ${brand.colors.primary}, ${brand.colors.secondary})` }} />
@@ -46,24 +46,24 @@ export default function BrandDashboard() {
           </div>
         </div>
         <div className="flex gap-3">
-          <Link href={`/brands/${id}/edit`} className="btn-ghost">Brand profile</Link>
+          <Link href={`/brands/${id}/edit`} className="btn-ghost">Brand Brain</Link>
           <Link href={`/brands/${id}/new`} className="btn-primary">+ New Reel</Link>
         </div>
       </div>
 
       {error && <p className="mt-6 rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
 
-      <div className="mt-10 grid lg:grid-cols-[1fr_360px] gap-8">
+      <div className="mt-8 grid xl:grid-cols-[1fr_340px] gap-8">
         <section>
           <h2 className="font-bold text-lg">Your Reels</h2>
           {reels.length === 0 ? (
             <div className="card mt-4 p-10 text-center">
               <p className="font-semibold">No Reels yet</p>
               <p className="text-sm text-ink/60 mt-1">Upload a photo or two and Tadaa does the rest.</p>
-              <Link href={`/brands/${id}/new`} className="btn-primary mt-5">Make your first Reel</Link>
+              <Link href={`/brands/${id}/first-reel`} className="btn-primary mt-5">Make your first Reel</Link>
             </div>
           ) : (
-            <div className="mt-4 grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
               {reels.map((r) => (
                 <Link key={r.id} href={`/reels/${r.id}`} className="card p-4 hover:shadow-md transition">
                   <div

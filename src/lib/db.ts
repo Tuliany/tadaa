@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brand, MediaItem, Plan, Reel } from "./types";
+import type { Brand, MediaItem, Plan, Reel, Session, User } from "./types";
 
 /**
  * Local JSON-file store for development and demos.
@@ -12,13 +12,15 @@ export const DATA_DIR = process.env.TADAA_DATA_DIR || path.join(process.cwd(), "
 const DB_FILE = path.join(DATA_DIR, "db.json");
 
 interface DB {
+  users: User[];
+  sessions: Session[];
   brands: Brand[];
   media: MediaItem[];
   reels: Reel[];
   plans: Plan[];
 }
 
-const empty: DB = { brands: [], media: [], reels: [], plans: [] };
+const empty: DB = { users: [], sessions: [], brands: [], media: [], reels: [], plans: [] };
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -50,9 +52,44 @@ function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
   return next;
 }
 
+// Users & sessions
+export async function getUserByEmail(email: string) {
+  return (await read()).users.find((u) => u.email === email.toLowerCase()) ?? null;
+}
+export async function getUser(id: string) {
+  return (await read()).users.find((u) => u.id === id) ?? null;
+}
+export function createUser(user: User) {
+  return mutate((db) => {
+    if (db.users.some((u) => u.email === user.email)) throw new Error("EMAIL_TAKEN");
+    // Brands created before accounts existed belong to the very first account.
+    if (db.users.length === 0) for (const b of db.brands) if (!b.ownerId) b.ownerId = user.id;
+    db.users.push(user);
+    return user;
+  });
+}
+export function saveSession(session: Session) {
+  return mutate((db) => {
+    const now = new Date().toISOString();
+    db.sessions = db.sessions.filter((s) => s.expiresAt > now);
+    db.sessions.push(session);
+  });
+}
+export async function getSession(tokenHash: string) {
+  const s = (await read()).sessions.find((x) => x.tokenHash === tokenHash);
+  return s && s.expiresAt > new Date().toISOString() ? s : null;
+}
+export function deleteSession(tokenHash: string) {
+  return mutate((db) => {
+    db.sessions = db.sessions.filter((s) => s.tokenHash !== tokenHash);
+  });
+}
+
 // Brands
-export async function listBrands() {
-  return (await read()).brands.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export async function listBrands(ownerId: string) {
+  return (await read()).brands
+    .filter((b) => b.ownerId === ownerId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 export async function getBrand(id: string) {
   return (await read()).brands.find((b) => b.id === id) ?? null;

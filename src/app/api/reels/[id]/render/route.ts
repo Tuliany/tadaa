@@ -2,7 +2,8 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
-import { getBrand, getReel, listMedia, saveReel } from "@/lib/db";
+import { handle, HttpError, renderToken, requireReel } from "@/lib/auth";
+import { getReel, listMedia, saveReel } from "@/lib/db";
 import { toRenderProps } from "@/lib/props";
 import { RENDER_DIR, renderPath } from "@/lib/storage";
 
@@ -30,10 +31,9 @@ function runRender(propsFile: string, outFile: string) {
 }
 
 /** Renders the Reel to MP4 (or returns the cached render) and responds with its download URL. */
-export async function POST(_req: Request, ctx: RouteContext<"/api/reels/[id]/render">) {
-  const { id } = await ctx.params;
-  const reel = await getReel(id);
-  if (!reel) return Response.json({ error: "Not found" }, { status: 404 });
+export const POST = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[id]/render">) => {
+  const { reel, brand } = await requireReel((await ctx.params).id);
+  const id = reel.id;
 
   if (reel.renderFile) {
     try {
@@ -44,8 +44,6 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/reels/[id]/ren
     }
   }
 
-  const brand = await getBrand(reel.brandId);
-  if (!brand) return Response.json({ error: "Brand not found" }, { status: 404 });
 
   let job = running.get(id);
   if (!job) {
@@ -54,6 +52,10 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/reels/[id]/ren
       // The renderer runs in this container, so load media over loopback rather than the public URL.
       const origin = process.env.TADAA_RENDER_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3000}`;
       const props = toRenderProps(brand, reel, media, origin);
+      // The renderer has no login cookie; give it this process's render token for our own media URLs.
+      const withToken = (u?: string) => (u && u.startsWith(`${origin}/api/media/`) ? `${u}?rt=${renderToken()}` : u);
+      props.media = props.media.map((m) => ({ ...m, url: withToken(m.url)! }));
+      props.brand = { ...props.brand, logoUrl: withToken(props.brand.logoUrl) };
       await fs.mkdir(RENDER_DIR, { recursive: true });
       const propsFile = path.join(os.tmpdir(), `tadaa-${id}-${Date.now()}.json`);
       await fs.writeFile(propsFile, JSON.stringify(props));
@@ -74,6 +76,6 @@ export async function POST(_req: Request, ctx: RouteContext<"/api/reels/[id]/ren
     await job;
     return Response.json({ url: `/api/reels/${id}/download` });
   } catch (e) {
-    return Response.json({ error: `The video couldn't be created. Please try again in a minute. (${(e as Error).message})` }, { status: 500 });
+    throw new HttpError(500, `The video couldn't be created. Please try again in a minute. (${(e as Error).message})`);
   }
-}
+});

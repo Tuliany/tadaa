@@ -1,31 +1,32 @@
 import { nanoid } from "nanoid";
 import sharp from "sharp";
 import path from "path";
-import { getBrand, listMedia, saveMedia } from "@/lib/db";
+import { handle, HttpError, requireBrand } from "@/lib/auth";
+import { listMedia, saveMedia } from "@/lib/db";
 import { saveUpload } from "@/lib/storage";
 import type { MediaItem } from "@/lib/types";
 
 const MAX_BYTES = 200 * 1024 * 1024;
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/brands/[id]/media">) {
-  const { id } = await ctx.params;
-  return Response.json(await listMedia(id));
-}
+export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[id]/media">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
+  return Response.json(await listMedia(brand.id));
+});
 
-export async function POST(req: Request, ctx: RouteContext<"/api/brands/[id]/media">) {
-  const { id } = await ctx.params;
-  if (!(await getBrand(id))) return Response.json({ error: "Brand not found" }, { status: 404 });
+export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[id]/media">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
+  const id = brand.id;
 
   const form = await req.formData();
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
-  if (!files.length) return Response.json({ error: "No files uploaded" }, { status: 400 });
+  if (!files.length) throw new HttpError(400, "No files uploaded");
 
   const saved: MediaItem[] = [];
   for (const file of files) {
     const kind = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
     if (!kind) continue;
     if (file.size > MAX_BYTES) {
-      return Response.json({ error: `${file.name} is larger than 200 MB` }, { status: 413 });
+      throw new HttpError(413, `${file.name} is larger than 200 MB`);
     }
     const mediaId = nanoid(12);
     let data: Buffer = Buffer.from(await file.arrayBuffer());
@@ -60,6 +61,6 @@ export async function POST(req: Request, ctx: RouteContext<"/api/brands/[id]/med
     await saveMedia(item);
     saved.push({ ...item, fileName: file.name });
   }
-  if (!saved.length) return Response.json({ error: "Only photos and videos are supported" }, { status: 400 });
+  if (!saved.length) throw new HttpError(400, "Only photos and videos are supported");
   return Response.json(saved);
-}
+});

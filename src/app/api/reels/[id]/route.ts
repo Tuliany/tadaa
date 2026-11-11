@@ -1,17 +1,15 @@
-import { getReel, saveReel } from "@/lib/db";
+import { handle, requireReel } from "@/lib/auth";
+import { saveReel } from "@/lib/db";
 import type { Reel, ReelScript } from "@/lib/types";
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/reels/[id]">) {
-  const { id } = await ctx.params;
-  const reel = await getReel(id);
-  return reel ? Response.json(reel) : Response.json({ error: "Not found" }, { status: 404 });
-}
+export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[id]">) => {
+  const { reel } = await requireReel((await ctx.params).id);
+  return Response.json(reel);
+});
 
 /** Approve / un-approve, or save manual text edits to the script. */
-export async function PATCH(req: Request, ctx: RouteContext<"/api/reels/[id]">) {
-  const { id } = await ctx.params;
-  const reel = await getReel(id);
-  if (!reel) return Response.json({ error: "Not found" }, { status: 404 });
+export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[id]">) => {
+  const { reel } = await requireReel((await ctx.params).id);
   const body = (await req.json()) as { status?: Reel["status"]; script?: Partial<ReelScript> };
 
   const next: Reel = { ...reel, updatedAt: new Date().toISOString() };
@@ -23,4 +21,4 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/reels/[id]">) 
   }
   await saveReel(next);
   return Response.json(next);
-}
+});

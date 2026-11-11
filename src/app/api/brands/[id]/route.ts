@@ -1,14 +1,15 @@
-import { getBrand, saveBrand } from "@/lib/db";
+import { handle, requireBrand } from "@/lib/auth";
+import { saveBrand } from "@/lib/db";
 import type { Brand } from "@/lib/types";
 
-export async function GET(_req: Request, ctx: RouteContext<"/api/brands/[id]">) {
-  const { id } = await ctx.params;
-  const brand = await getBrand(id);
-  return brand ? Response.json(brand) : Response.json({ error: "Not found" }, { status: 404 });
-}
+export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[id]">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
+  return Response.json(brand);
+});
 
 const EDITABLE: (keyof Brand)[] = [
   "name",
+  "headline",
   "website",
   "instagram",
   "industry",
@@ -20,15 +21,14 @@ const EDITABLE: (keyof Brand)[] = [
   "colors",
   "logoUrl",
   "language",
+  "referenceReels",
 ];
 
-export async function PUT(req: Request, ctx: RouteContext<"/api/brands/[id]">) {
-  const { id } = await ctx.params;
-  const brand = await getBrand(id);
-  if (!brand) return Response.json({ error: "Not found" }, { status: 404 });
+export const PUT = handle(async (req: Request, ctx: RouteContext<"/api/brands/[id]">) => {
+  const { brand } = await requireBrand((await ctx.params).id);
   const patch = (await req.json()) as Partial<Brand>;
   const next = { ...brand } as Record<string, unknown>;
   for (const key of EDITABLE) if (key in patch) next[key] = patch[key];
   await saveBrand(next as unknown as Brand);
   return Response.json(next);
-}
+});

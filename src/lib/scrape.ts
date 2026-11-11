@@ -4,6 +4,7 @@ export interface SiteInfo {
   url: string;
   title: string;
   siteName: string;
+  headline: string;
   description: string;
   lang: string;
   logoUrl?: string;
@@ -101,7 +102,9 @@ export function parseSite(url: string, html: string, extraCss = ""): SiteInfo {
     .slice(0, 4000);
 
   const title = $("title").text().trim();
+  const headline = $("h1").first().text().replace(/\s+/g, " ").trim().slice(0, 140);
   return {
+    headline,
     url,
     title,
     siteName: meta('meta[property="og:site_name"]') || title.split(/[|\-–—]/)[0].trim(),
@@ -112,6 +115,18 @@ export function parseSite(url: string, html: string, extraCss = ""): SiteInfo {
     colors: extractColors(inlineCss + " " + extraCss, meta('meta[name="theme-color"]')),
     text,
   };
+}
+
+const cache = new Map<string, { at: number; info: SiteInfo }>();
+
+/** Scrape with a 10-minute cache so the onboarding preview and profile build don't fetch twice. */
+export async function scrapeSiteCached(input: string) {
+  const key = normalizeUrl(input).replace(/\/$/, "");
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return hit.info;
+  const info = await scrapeSite(input);
+  cache.set(key, { at: Date.now(), info });
+  return info;
 }
 
 export async function scrapeSite(input: string): Promise<SiteInfo> {

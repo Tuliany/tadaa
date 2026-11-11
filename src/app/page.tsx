@@ -26,11 +26,11 @@ export default function Home() {
             Tadaa turns your photos into scroll-stopping Reels in your brand&apos;s look and voice – in English, Swedish, Spanish, German or French.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/onboarding" className="btn-primary text-base px-7 py-3">
+            <Link href="/signup" className="btn-primary text-base px-7 py-3">
               Make my first Reel – free
             </Link>
-            <Link href="/brands" className="btn-ghost text-base px-7 py-3">
-              Open my brands
+            <Link href="/login" className="btn-ghost text-base px-7 py-3">
+              Log in
             </Link>
           </div>
         </div>
