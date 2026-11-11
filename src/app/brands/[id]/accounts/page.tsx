@@ -3,27 +3,50 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 
+/**
+ * Official logo files go in /public/logos/<slug>.png (or .svg) – use each brand's own asset, unmodified.
+ * Until a file exists the emoji is shown.
+ */
+function Logo({ slug, emoji }: { slug: string; emoji: string }) {
+  const sources = [`/logos/${slug}.svg`, `/logos/${slug}.png`];
+  const [i, setI] = useState(0);
+  return (
+    <span className="h-11 w-11 rounded-xl bg-cream grid place-items-center text-2xl overflow-hidden">
+      {i < sources.length ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={sources[i]} alt="" className="h-7 w-7 object-contain" onError={() => setI(i + 1)} />
+      ) : (
+        emoji
+      )}
+    </span>
+  );
+}
+
 const COMING_SOON = [
   {
     name: "Instagram",
+    slug: "instagram",
     icon: "📸",
     what: "Learn from your profile and posts, publish approved Reels, and answer comments.",
     needs: "A Professional (Creator or Business) Instagram account.",
   },
   {
     name: "Facebook",
+    slug: "facebook",
     icon: "📘",
     what: "Publish approved Reels to your Facebook Page.",
     needs: "A Facebook Page you manage.",
   },
   {
     name: "LinkedIn",
+    slug: "linkedin",
     icon: "💼",
     what: "Publish approved videos to your profile or company page.",
     needs: "Admin access to the company page.",
   },
   {
     name: "Google Drive",
+    slug: "google-drive",
     icon: "🗂️",
     what: "Pick a folder of photos and clips – they appear in your Tadaa library automatically.",
     needs: "A Google account with your brand's media.",
@@ -66,7 +89,7 @@ function ClaudeCard() {
   return (
     <div className="card p-5 flex flex-col md:col-span-2 border-2 border-coral/30">
       <div className="flex items-center gap-3">
-        <span className="h-11 w-11 rounded-xl bg-cream grid place-items-center text-2xl">✳️</span>
+        <Logo slug="claude" emoji="✳️" />
         <div>
           <p className="font-bold text-lg">Claude</p>
           <p className={`text-xs font-semibold ${connected ? "text-green-600" : "text-ink/40"}`}>{connected ? "Connected" : "Not connected"}</p>
@@ -129,7 +152,7 @@ export default function Accounts() {
         {COMING_SOON.map((c) => (
           <div key={c.name} className="card p-5 flex flex-col">
             <div className="flex items-center gap-3">
-              <span className="h-11 w-11 rounded-xl bg-cream grid place-items-center text-2xl">{c.icon}</span>
+              <Logo slug={c.slug} emoji={c.icon} />
               <div>
                 <p className="font-bold text-lg">{c.name}</p>
                 <p className="text-xs font-semibold text-ink/40">Not connected</p>
