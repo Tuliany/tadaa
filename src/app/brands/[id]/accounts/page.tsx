@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 
 /** Official logo files in /public/logos – each brand's own asset, unmodified. Brands without one show their emoji. */
-const LOGOS = new Set(["claude", "instagram", "facebook", "linkedin", "google-drive"]);
+const LOGOS = new Set(["claude", "instagram", "facebook", "tiktok", "linkedin", "google-drive"]);
 
 function Logo({ slug, emoji }: { slug: string; emoji: string }) {
   return (
