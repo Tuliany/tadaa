@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brand, MediaItem, PasswordReset, Plan, Reel, Session, User } from "./types";
+import type { Brand, MediaItem, OAuthClient, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
 
 /**
  * Local JSON-file store for development and demos.
@@ -19,9 +19,23 @@ interface DB {
   media: MediaItem[];
   reels: Reel[];
   plans: Plan[];
+  oauthClients: OAuthClient[];
+  oauthCodes: OAuthCode[];
+  oauthTokens: OAuthToken[];
 }
 
-const empty: DB = { users: [], sessions: [], resets: [], brands: [], media: [], reels: [], plans: [] };
+const empty: DB = {
+  users: [],
+  sessions: [],
+  resets: [],
+  brands: [],
+  media: [],
+  reels: [],
+  plans: [],
+  oauthClients: [],
+  oauthCodes: [],
+  oauthTokens: [],
+};
 
 let queue: Promise<unknown> = Promise.resolve();
 
@@ -77,6 +91,7 @@ export function setPassword(userId: string, passwordHash: string) {
     // Log out everywhere and burn any other reset links.
     db.sessions = db.sessions.filter((s) => s.userId !== userId);
     db.resets = db.resets.filter((r) => r.userId !== userId);
+    db.oauthTokens = db.oauthTokens.filter((t) => t.userId !== userId);
   });
 }
 export function saveReset(reset: PasswordReset) {
@@ -121,6 +136,8 @@ export function deleteUserCascade(userId: string) {
     db.media = db.media.filter((m) => !brandIds.has(m.brandId));
     db.reels = db.reels.filter((r) => !brandIds.has(r.brandId));
     db.plans = db.plans.filter((p) => !brandIds.has(p.brandId));
+    db.oauthCodes = db.oauthCodes.filter((c) => c.userId !== userId);
+    db.oauthTokens = db.oauthTokens.filter((t) => t.userId !== userId);
     return { uploads, renders, brands: brandIds.size };
   });
 }
@@ -186,5 +203,59 @@ export function savePlan(plan: Plan) {
     db.plans = db.plans.filter((p) => p.brandId !== plan.brandId);
     db.plans.push(plan);
     return plan;
+  });
+}
+
+// OAuth (connectors such as Claude)
+export function saveOAuthClient(client: OAuthClient) {
+  return mutate((db) => {
+    db.oauthClients.push(client);
+    return client;
+  });
+}
+export async function getOAuthClient(clientId: string) {
+  return (await read()).oauthClients.find((c) => c.clientId === clientId) ?? null;
+}
+export function saveOAuthCode(code: OAuthCode) {
+  return mutate((db) => {
+    const now = new Date().toISOString();
+    db.oauthCodes = db.oauthCodes.filter((c) => c.expiresAt > now);
+    db.oauthCodes.push(code);
+  });
+}
+/** Returns the code and deletes it, so each code works once. */
+export function consumeOAuthCode(codeHash: string) {
+  return mutate((db) => {
+    const code = db.oauthCodes.find((c) => c.codeHash === codeHash) ?? null;
+    db.oauthCodes = db.oauthCodes.filter((c) => c.codeHash !== codeHash);
+    return code && code.expiresAt > new Date().toISOString() ? code : null;
+  });
+}
+export function saveOAuthTokens(tokens: OAuthToken[]) {
+  return mutate((db) => {
+    const now = new Date().toISOString();
+    db.oauthTokens = db.oauthTokens.filter((t) => t.expiresAt > now);
+    db.oauthTokens.push(...tokens);
+  });
+}
+export async function getOAuthToken(tokenHash: string, kind: OAuthToken["kind"]) {
+  const t = (await read()).oauthTokens.find((x) => x.tokenHash === tokenHash && x.kind === kind);
+  return t && t.expiresAt > new Date().toISOString() ? t : null;
+}
+export function deleteOAuthToken(tokenHash: string) {
+  return mutate((db) => {
+    db.oauthTokens = db.oauthTokens.filter((t) => t.tokenHash !== tokenHash);
+  });
+}
+/** Apps the user has connected (one entry per client with a live refresh token). */
+export async function listConnectedClients(userId: string) {
+  const db = await read();
+  const now = new Date().toISOString();
+  const ids = new Set(db.oauthTokens.filter((t) => t.userId === userId && t.kind === "refresh" && t.expiresAt > now).map((t) => t.clientId));
+  return db.oauthClients.filter((c) => ids.has(c.clientId)).map((c) => ({ clientId: c.clientId, name: c.name, createdAt: c.createdAt }));
+}
+export function revokeUserTokens(userId: string, clientId?: string) {
+  return mutate((db) => {
+    db.oauthTokens = db.oauthTokens.filter((t) => !(t.userId === userId && (!clientId || t.clientId === clientId)));
   });
 }

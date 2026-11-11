@@ -122,3 +122,35 @@ export interface ReelRenderProps {
   media: { id: string; url: string; kind: "image" | "video" }[];
   [key: string]: unknown;
 }
+
+/** A client (e.g. Claude) registered through OAuth dynamic client registration. */
+export interface OAuthClient {
+  clientId: string;
+  /** sha256 of the client secret, for confidential clients. */
+  secretHash?: string;
+  name: string;
+  redirectUris: string[];
+  createdAt: string;
+}
+
+/** One-time authorization code (stored hashed). */
+export interface OAuthCode {
+  codeHash: string;
+  clientId: string;
+  userId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  scope: string;
+  expiresAt: string;
+}
+
+/** Access or refresh token (stored hashed). */
+export interface OAuthToken {
+  tokenHash: string;
+  kind: "access" | "refresh";
+  clientId: string;
+  userId: string;
+  scope: string;
+  expiresAt: string;
+  createdAt: string;
+}
