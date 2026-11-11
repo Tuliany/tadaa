@@ -38,6 +38,13 @@ const COMING_SOON = [
     needs: "A Facebook Page you manage.",
   },
   {
+    name: "TikTok",
+    slug: "tiktok",
+    icon: "🎵",
+    what: "Publish approved Reels as TikTok videos.",
+    needs: "A TikTok account (Business or Creator).",
+  },
+  {
     name: "LinkedIn",
     slug: "linkedin",
     icon: "💼",
