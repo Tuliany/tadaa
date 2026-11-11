@@ -108,6 +108,23 @@ export function deleteSession(tokenHash: string) {
   });
 }
 
+/** Remove a user and everything they own. Returns stored file names so the caller can delete them from disk. */
+export function deleteUserCascade(userId: string) {
+  return mutate((db) => {
+    const brandIds = new Set(db.brands.filter((b) => b.ownerId === userId).map((b) => b.id));
+    const uploads = db.media.filter((m) => brandIds.has(m.brandId)).map((m) => m.fileName);
+    const renders = db.reels.filter((r) => brandIds.has(r.brandId) && r.renderFile).map((r) => r.renderFile as string);
+    db.users = db.users.filter((u) => u.id !== userId);
+    db.sessions = db.sessions.filter((s) => s.userId !== userId);
+    db.resets = db.resets.filter((r) => r.userId !== userId);
+    db.brands = db.brands.filter((b) => !brandIds.has(b.id));
+    db.media = db.media.filter((m) => !brandIds.has(m.brandId));
+    db.reels = db.reels.filter((r) => !brandIds.has(r.brandId));
+    db.plans = db.plans.filter((p) => !brandIds.has(p.brandId));
+    return { uploads, renders, brands: brandIds.size };
+  });
+}
+
 // Brands
 export async function listBrands(ownerId: string) {
   return (await read()).brands

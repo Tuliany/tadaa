@@ -68,6 +68,12 @@ export default function AuthForm({ mode }: { mode: "login" | "signup" }) {
         <button className="btn-primary w-full py-3 text-base" disabled={busy}>
           {busy ? "One moment…" : mode === "signup" ? "Create account" : "Log in"}
         </button>
+        {mode === "signup" && (
+          <p className="text-xs text-ink/50 text-center">
+            By creating an account you agree to our <Link href="/terms" className="underline">terms</Link> and{" "}
+            <Link href="/privacy" className="underline">privacy policy</Link>.
+          </p>
+        )}
       </form>
       <p className="mt-5 text-sm text-ink/60 text-center">
         {mode === "signup" ? (

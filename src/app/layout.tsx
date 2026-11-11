@@ -21,6 +21,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         <main className="flex-1">{children}</main>
+        <footer className="border-t border-black/5 bg-white/60">
+          <div className="mx-auto max-w-6xl px-4 py-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink/50">
+            <span>© 2026 Tadaai</span>
+            <nav className="flex gap-5">
+              <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+              <Link href="/terms" className="hover:text-ink">Terms</Link>
+              <Link href="/data-deletion" className="hover:text-ink">Delete your data</Link>
+            </nav>
+          </div>
+        </footer>
       </body>
     </html>
   );
