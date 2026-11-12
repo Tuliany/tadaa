@@ -65,7 +65,7 @@ export default function TikTokPost({ reel, onChange }: { reel: Reel; onChange: (
     if (!processing) return;
     const t = setInterval(async () => {
       try {
-        onChange(await api<Reel>(`/api/reels/${reel.id}/tiktok/status`));
+        onChange(await api<Reel>(`/api/reels/${reel.id}/publications`));
       } catch {}
     }, 5000);
     return () => clearInterval(t);

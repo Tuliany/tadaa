@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import MetaPost from "@/components/MetaPost";
 import TikTokPost from "@/components/TikTokPost";
 import { api } from "@/lib/client";
 import { toRenderProps } from "@/lib/props";
@@ -105,6 +106,7 @@ export default function ReelPage() {
                 <button className="btn-primary py-3" onClick={download} disabled={!!busy}>
                   {busy === "render" ? "Rendering video… (about a minute)" : "⬇ Download MP4"}
                 </button>
+                <MetaPost reel={reel} onChange={setReel} />
                 <TikTokPost reel={reel} onChange={setReel} />
                 <button className="btn-ghost" onClick={() => setStatus("draft")} disabled={!!busy}>Back to draft</button>
               </>

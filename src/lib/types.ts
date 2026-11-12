@@ -104,7 +104,19 @@ export interface Reel {
   updatedAt: string;
 }
 
-export type SocialProvider = "tiktok";
+export type SocialProvider = "tiktok" | "meta";
+
+/** A Facebook Page the user manages, with its linked Instagram professional account (if any). */
+export interface MetaPage {
+  id: string;
+  name: string;
+  pictureUrl?: string;
+  /** Page access token (never expires when derived from a long-lived user token), encrypted. */
+  tokenEnc: string;
+  igId?: string;
+  igUsername?: string;
+  igPictureUrl?: string;
+}
 
 /** A brand's connected social account. Tokens are stored encrypted. */
 export interface SocialConnection {
@@ -121,12 +133,17 @@ export interface SocialConnection {
   refreshTokenEnc: string;
   accessExpiresAt: string;
   refreshExpiresAt: string;
+  /** Meta only: the user's Pages and which one this brand posts to. */
+  pages?: MetaPage[];
+  selectedPageId?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export type PublishTarget = "tiktok" | "instagram" | "facebook";
+
 export interface Publication {
-  provider: SocialProvider;
+  provider: PublishTarget;
   accountName: string;
   /** Platform id for the upload (TikTok publish_id). */
   publishId: string;
@@ -134,6 +151,8 @@ export interface Publication {
   status: "processing" | "published" | "failed";
   error?: string;
   postId?: string;
+  /** Link to the live post, when the platform gives one. */
+  permalink?: string;
   createdAt: string;
   updatedAt: string;
 }

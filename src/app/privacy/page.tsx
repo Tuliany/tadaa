@@ -85,6 +85,16 @@ export default function Privacy() {
         Accounts, which revokes our access at TikTok and deletes the stored tokens.
       </p>
 
+      <h3>Connected social accounts (Facebook and Instagram)</h3>
+      <p>
+        If you connect with Facebook, we receive your Facebook user id and name, the list of Facebook Pages you choose to share with Tadaa
+        (id, name, picture and a Page access token), and the Instagram professional account linked to each Page (id, username and profile
+        picture). Tokens are stored encrypted. We use them only to show which Page and Instagram account are connected and to publish the Reels
+        you choose to post, with the caption you write each time. We do not read your messages, followers, insights or other posts. You can
+        disconnect at any time under Accounts, which removes Tadaa&apos;s permissions at Facebook and deletes the stored tokens. You can also
+        remove Tadaa in your Facebook settings under Business Integrations; to ask us to delete any remaining data, email hello@tadaaai.com.
+      </p>
+
       <h2>7. How long we keep data</h2>
       <ul>
         <li>Account, brand data, uploads and Reels: for as long as your account exists. When you delete your account, they are deleted within 30 days.</li>
