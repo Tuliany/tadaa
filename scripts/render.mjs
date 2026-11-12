@@ -44,6 +44,15 @@ const t0 = Date.now();
 const composition = await selectComposition({ serveUrl, id: "Reel", inputProps, browserExecutable, chromeMode, chromiumOptions, timeoutInMilliseconds });
 console.log(`composition ready after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
+// FFmpeg/x264 size their thread pools from the host's CPU count (45+ threads on Railway), which can blow
+// past a small container's memory limit and get the encoder killed. Cap it.
+const ffmpegThreads = String(process.env.TADAA_FFMPEG_THREADS || 2);
+const ffmpegOverride = ({ args }) => {
+  const out = args.slice();
+  const outputPath = out.pop();
+  return [...out, "-threads", ffmpegThreads, "-x264-params", `threads=${ffmpegThreads}:lookahead-threads=1`, outputPath];
+};
+
 let last = -1;
 await renderMedia({
   composition,
@@ -57,6 +66,8 @@ await renderMedia({
   chromeMode,
   chromiumOptions,
   scale,
+  x264Preset: process.env.TADAA_X264_PRESET || "veryfast",
+  ffmpegOverride,
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 100);
     if (pct % 10 === 0 && pct !== last) {

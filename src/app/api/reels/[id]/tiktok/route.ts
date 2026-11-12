@@ -55,7 +55,12 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
 
   let current: Reel = reel;
   if (!(await hasRender(reel))) {
-    await startRender(brand, reel);
+    try {
+      await startRender(brand, reel);
+    } catch (e) {
+      console.error("[tiktok] render before posting failed", e);
+      throw new HttpError(500, "The video couldn't be created, so nothing was posted. Please try again in a minute.");
+    }
     current = (await getReel(reel.id)) ?? reel;
   }
 
