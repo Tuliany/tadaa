@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/client";
 
 /** Official logo files in /public/logos – each brand's own asset, unmodified. Brands without one show their emoji. */
@@ -33,13 +34,6 @@ const COMING_SOON = [
     icon: "📘",
     what: "Publish approved Reels to your Facebook Page.",
     needs: "A Facebook Page you manage.",
-  },
-  {
-    name: "TikTok",
-    slug: "tiktok",
-    icon: "🎵",
-    what: "Publish approved Reels as TikTok videos.",
-    needs: "A TikTok account (Business or Creator).",
   },
   {
     name: "LinkedIn",
@@ -146,6 +140,83 @@ function ClaudeCard() {
   );
 }
 
+interface TikTokState {
+  available: boolean;
+  connected: boolean;
+  displayName?: string;
+  avatarUrl?: string;
+  canPost: boolean;
+}
+
+function TikTokCard() {
+  const { id } = useParams<{ id: string }>();
+  const params = useSearchParams();
+  const [tt, setTt] = useState<TikTokState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const result = params.get("tiktok");
+  const message = params.get("message");
+
+  const load = () =>
+    api<{ tiktok: TikTokState }>(`/api/brands/${id}/connections`)
+      .then((r) => setTt(r.tiktok))
+      .catch(() => {});
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function disconnect() {
+    if (!confirm("Disconnect TikTok? Tadaa will no longer be able to post to this account.")) return;
+    setBusy(true);
+    await api(`/api/brands/${id}/connections?provider=tiktok`, { method: "DELETE" }).catch(() => {});
+    await load();
+    setBusy(false);
+  }
+
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-center gap-3">
+        <Logo slug="tiktok" emoji="🎵" />
+        <div className="min-w-0">
+          <p className="font-bold text-lg">TikTok</p>
+          <p className={`text-xs font-semibold truncate ${tt?.connected ? "text-green-600" : "text-ink/40"}`}>
+            {tt?.connected ? `Connected · ${tt.displayName}` : "Not connected"}
+          </p>
+        </div>
+        {tt?.connected && tt.avatarUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={tt.avatarUrl} alt="" className="ml-auto h-9 w-9 rounded-full" />
+        )}
+      </div>
+      <p className="mt-3 text-sm text-ink/70">Post approved Reels straight to TikTok, with your caption and privacy settings.</p>
+      <p className="mt-1 text-xs text-ink/45">Needs: a TikTok account (Business or Creator recommended).</p>
+      {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">TikTok connected ✓</p>}
+      {result === "partial" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</p>}
+      {result === "error" && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t connect TikTok: {message}</p>}
+      {tt && !tt.available ? (
+        <button className="btn-ghost mt-4 self-start" disabled title="Coming soon">
+          Connect · coming soon
+        </button>
+      ) : tt?.connected ? (
+        <div className="mt-4 flex gap-2">
+          {!tt.canPost && (
+            <a className="btn-dark" href={`/api/connect/tiktok/start?brandId=${id}`}>
+              Reconnect
+            </a>
+          )}
+          <button className="btn-ghost" onClick={disconnect} disabled={busy}>
+            {busy ? "Disconnecting…" : "Disconnect"}
+          </button>
+        </div>
+      ) : (
+        <a className="btn-dark mt-4 self-start" href={`/api/connect/tiktok/start?brandId=${id}`}>
+          Connect TikTok
+        </a>
+      )}
+    </div>
+  );
+}
+
 export default function Accounts() {
   return (
     <div>
@@ -153,6 +224,9 @@ export default function Accounts() {
       <p className="mt-1 text-ink/60">Connect where your brand lives. Everything is optional – Tadaa makes Reels without any of these.</p>
       <div className="mt-8 grid md:grid-cols-2 gap-4">
         <ClaudeCard />
+        <Suspense>
+          <TikTokCard />
+        </Suspense>
         {COMING_SOON.map((c) => (
           <div key={c.name} className="card p-5 flex flex-col">
             <div className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Brand, MediaItem, OAuthClient, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
+import type { Brand, MediaItem, OAuthClient, SocialConnection, SocialProvider, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
 
 /**
  * Local JSON-file store for development and demos.
@@ -22,6 +22,7 @@ interface DB {
   oauthClients: OAuthClient[];
   oauthCodes: OAuthCode[];
   oauthTokens: OAuthToken[];
+  connections: SocialConnection[];
 }
 
 const empty: DB = {
@@ -35,6 +36,7 @@ const empty: DB = {
   oauthClients: [],
   oauthCodes: [],
   oauthTokens: [],
+  connections: [],
 };
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -138,6 +140,7 @@ export function deleteUserCascade(userId: string) {
     db.plans = db.plans.filter((p) => !brandIds.has(p.brandId));
     db.oauthCodes = db.oauthCodes.filter((c) => c.userId !== userId);
     db.oauthTokens = db.oauthTokens.filter((t) => t.userId !== userId);
+    db.connections = (db.connections ?? []).filter((c) => c.ownerId !== userId);
     return { uploads, renders, brands: brandIds.size };
   });
 }
@@ -257,5 +260,26 @@ export async function listConnectedClients(userId: string) {
 export function revokeUserTokens(userId: string, clientId?: string) {
   return mutate((db) => {
     db.oauthTokens = db.oauthTokens.filter((t) => !(t.userId === userId && (!clientId || t.clientId === clientId)));
+  });
+}
+
+// Social connections (TikTok, …) – one per brand and provider
+export async function getConnection(brandId: string, provider: SocialProvider) {
+  return ((await read()).connections ?? []).find((c) => c.brandId === brandId && c.provider === provider) ?? null;
+}
+export async function listConnections(brandId: string) {
+  return ((await read()).connections ?? []).filter((c) => c.brandId === brandId);
+}
+export function saveConnection(conn: SocialConnection) {
+  return mutate((db) => {
+    db.connections ??= [];
+    db.connections = db.connections.filter((c) => !(c.brandId === conn.brandId && c.provider === conn.provider));
+    db.connections.push(conn);
+    return conn;
+  });
+}
+export function deleteConnection(brandId: string, provider: SocialProvider) {
+  return mutate((db) => {
+    db.connections = (db.connections ?? []).filter((c) => !(c.brandId === brandId && c.provider === provider));
   });
 }

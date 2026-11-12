@@ -98,6 +98,42 @@ export interface Reel {
   status: ReelStatus;
   revisions: Revision[];
   renderFile?: string;
+  /** Where this Reel has been posted (newest last). */
+  publications?: Publication[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SocialProvider = "tiktok";
+
+/** A brand's connected social account. Tokens are stored encrypted. */
+export interface SocialConnection {
+  id: string;
+  brandId: string;
+  ownerId: string;
+  provider: SocialProvider;
+  /** The account id on the platform (TikTok open_id). */
+  accountId: string;
+  displayName: string;
+  avatarUrl?: string;
+  scope: string;
+  accessTokenEnc: string;
+  refreshTokenEnc: string;
+  accessExpiresAt: string;
+  refreshExpiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Publication {
+  provider: SocialProvider;
+  accountName: string;
+  /** Platform id for the upload (TikTok publish_id). */
+  publishId: string;
+  privacy: string;
+  status: "processing" | "published" | "failed";
+  error?: string;
+  postId?: string;
   createdAt: string;
   updatedAt: string;
 }

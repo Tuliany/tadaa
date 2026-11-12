@@ -58,7 +58,7 @@ export default function Privacy() {
         <li><strong>Anthropic</strong> – AI text generation.</li>
         <li><strong>Resend</strong> – sending service emails such as password resets.</li>
         <li><strong>Cloudflare</strong> – domain name service and network security.</li>
-        <li><strong>Meta, LinkedIn and Google</strong> – only when you connect those accounts, to publish content or read files you choose.</li>
+        <li><strong>Meta, LinkedIn, TikTok and Google</strong> – only when you connect those accounts, to publish content or read files you choose.</li>
       </ul>
       <p>
         Some of these providers process data outside the EU/EEA, including in the United States. Where they do, transfers rely on the EU–US Data
@@ -75,6 +75,14 @@ export default function Privacy() {
         , including the Limited Use requirements. We use that data only to add your chosen media to your Tadaai library, we do not use it for
         advertising, we do not sell it, and no person reads it except where you ask us to for support, where it is needed for security, or
         where the law requires it.
+      </p>
+
+      <h3>Connected social accounts (TikTok)</h3>
+      <p>
+        If you connect a TikTok account, we receive and store your TikTok account id, display name and profile picture, and access tokens
+        (stored encrypted). We use them only to show which account is connected and to publish the videos you choose to post, with the caption
+        and privacy settings you select each time. We do not read your followers, messages or other videos. You can disconnect at any time under
+        Accounts, which revokes our access at TikTok and deletes the stored tokens.
       </p>
 
       <h2>7. How long we keep data</h2>

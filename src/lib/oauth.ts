@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { DATA_DIR, getOAuthToken, getUser, saveOAuthTokens } from "./db";
@@ -142,4 +142,25 @@ export async function verifyDownload(reelId: string, exp: string | null, sig: st
   const a = Buffer.from(expected);
   const b = Buffer.from(sig);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// ---------- Encryption at rest (third-party tokens) ----------
+
+async function encryptionKey() {
+  return createHash("sha256").update(Buffer.concat([Buffer.from("tadaa-enc:"), await serverSecret()])).digest();
+}
+
+/** AES-256-GCM. Output: base64url(iv | tag | ciphertext). */
+export async function encrypt(plain: string) {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", await encryptionKey(), iv);
+  const body = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), body]).toString("base64url");
+}
+
+export async function decrypt(enc: string) {
+  const buf = Buffer.from(enc, "base64url");
+  const decipher = createDecipheriv("aes-256-gcm", await encryptionKey(), buf.subarray(0, 12));
+  decipher.setAuthTag(buf.subarray(12, 28));
+  return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
 }
