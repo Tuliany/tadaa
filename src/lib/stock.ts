@@ -83,10 +83,24 @@ const mp4s = (v: PexelsVideo) => v.video_files.filter((f) => f.file_type === "vi
 
 // ---------- Public ----------
 
+// Pixabay asks that identical requests are cached for 24 hours.
+const CACHE_MS = 24 * 60 * 60 * 1000;
+const cache = new Map<string, { at: number; hits: StockHit[] }>();
+
 /** Search clips; vertical ones first (Reels are 9:16). */
 export async function searchStock(query: string): Promise<StockHit[]> {
   const provider = stockProvider();
   if (!provider) throw new Error("Stock clips aren't set up on this server yet.");
+  const key = `${provider}:${query.trim().toLowerCase()}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.hits;
+  const hits = await searchUncached(provider, query);
+  if (cache.size > 500) cache.delete(cache.keys().next().value!);
+  cache.set(key, { at: Date.now(), hits });
+  return hits;
+}
+
+async function searchUncached(provider: StockProvider, query: string): Promise<StockHit[]> {
   if (provider === "pixabay") {
     const res = await getJson<{ hits: PixabayHit[] }>(pixabayUrl({ q: query.slice(0, 100), per_page: "60" }));
     const hits = res.hits.map(pixabayToHit);
