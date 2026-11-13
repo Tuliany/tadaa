@@ -3,7 +3,7 @@ import path from "path";
 import sharp from "sharp";
 import { saveMedia } from "./db";
 import { probeDuration } from "./reference";
-import { saveUpload, uploadPath } from "./storage";
+import { localFile, saveFile } from "./storage";
 import type { MediaItem } from "./types";
 
 export const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
@@ -43,8 +43,8 @@ export async function importMedia(
     }
   }
   const fileName = `${mediaId}${ext}`;
-  await saveUpload(fileName, data);
-  const duration = kind === "video" ? await probeDuration(uploadPath(fileName)) : undefined;
+  await saveFile("uploads", fileName, data);
+  const duration = kind === "video" ? await probeDuration(await localFile("uploads", fileName)) : undefined;
   const item: MediaItem = { id: mediaId, brandId, fileName, mimeType, kind, ...(duration ? { duration } : {}), ...(source ? { source } : {}), createdAt: new Date().toISOString() };
   await saveMedia(item);
   return item;

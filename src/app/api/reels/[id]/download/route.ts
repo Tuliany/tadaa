@@ -1,9 +1,7 @@
-import { createReadStream, promises as fs } from "fs";
-import { Readable } from "stream";
 import { handle, requireReel } from "@/lib/auth";
 import { getBrand, getReel } from "@/lib/db";
 import { verifyDownload } from "@/lib/oauth";
-import { renderPath } from "@/lib/storage";
+import { fileSize, openFile } from "@/lib/storage";
 
 /** Download the MP4. Works with a login cookie, or with a signed link (from the Claude connector). */
 export const GET = handle(async (req: Request, ctx: RouteContext<"/api/reels/[id]/download">) => {
@@ -18,10 +16,11 @@ export const GET = handle(async (req: Request, ctx: RouteContext<"/api/reels/[id
     ({ reel, brand } = await requireReel(id));
   }
   if (!reel.renderFile) return new Response("Not rendered yet", { status: 404 });
-  const file = renderPath(reel.renderFile);
-  const { size } = await fs.stat(file);
+  const size = await fileSize("renders", reel.renderFile);
+  const body = size === null ? null : await openFile("renders", reel.renderFile);
+  if (size === null || !body) return new Response("The video file is missing. Render it again.", { status: 404 });
   const slug = `${brand.name}-${reel.topic}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
-  return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, {
+  return new Response(body, {
     headers: {
       "content-type": "video/mp4",
       "content-length": String(size),

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",
+    "@aws-sdk/client-s3": "^3.1168.0",
     "@remotion/bundler": "^4.0.542",
     "@remotion/fonts": "^4.0.542",
     "@remotion/player": "^4.0.542",
@@ -17,6 +18,7 @@
     "cheerio": "^1.2.0",
     "nanoid": "^6.0.2",
     "next": "16.4.6",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "remotion": "^4.0.542",
@@ -26,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -1,285 +1,211 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { deleteFile } from "./storage";
+import { keyOf, store, type Tx } from "./store";
 import type { Brand, MediaItem, OAuthClient, SocialConnection, SocialProvider, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
 
 /**
- * Local JSON-file store for development and demos.
- * Swap this module for a Supabase implementation in production;
- * the rest of the app only uses the functions exported here.
+ * Data access for the whole app. Backed by Postgres in production (DATABASE_URL)
+ * and by a JSON file locally – see ./store.ts.
  */
 
-export const DATA_DIR = process.env.TADAA_DATA_DIR || path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "db.json");
+export { DATA_DIR } from "./store";
 
-interface DB {
-  users: User[];
-  sessions: Session[];
-  resets: PasswordReset[];
-  brands: Brand[];
-  media: MediaItem[];
-  reels: Reel[];
-  plans: Plan[];
-  oauthClients: OAuthClient[];
-  oauthCodes: OAuthCode[];
-  oauthTokens: OAuthToken[];
-  connections: SocialConnection[];
-}
-
-const empty: DB = {
-  users: [],
-  sessions: [],
-  resets: [],
-  brands: [],
-  media: [],
-  reels: [],
-  plans: [],
-  oauthClients: [],
-  oauthCodes: [],
-  oauthTokens: [],
-  connections: [],
-};
-
-let queue: Promise<unknown> = Promise.resolve();
-
-async function read(): Promise<DB> {
-  try {
-    const raw = await fs.readFile(DB_FILE, "utf8");
-    return { ...empty, ...JSON.parse(raw) };
-  } catch {
-    return structuredClone(empty);
-  }
-}
-
-async function write(db: DB) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tmp = DB_FILE + ".tmp";
-  await fs.writeFile(tmp, JSON.stringify(db, null, 2));
-  await fs.rename(tmp, DB_FILE);
-}
-
-/** Serialise read-modify-write so concurrent requests don't clobber each other. */
-function mutate<T>(fn: (db: DB) => T | Promise<T>): Promise<T> {
-  const next = queue.then(async () => {
-    const db = await read();
-    const result = await fn(db);
-    await write(db);
-    return result;
-  });
-  queue = next.catch(() => undefined);
-  return next;
-}
+const db = () => store();
+const newestFirst = <T extends { createdAt: string }>(list: T[]) => list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+const live = <T extends { expiresAt: string }>(x: T | null) => (x && x.expiresAt > new Date().toISOString() ? x : null);
 
 // Users & sessions
 export async function getUserByEmail(email: string) {
-  return (await read()).users.find((u) => u.email === email.toLowerCase()) ?? null;
+  return db().get<User>("users", { email: email.toLowerCase() });
 }
 export async function getUser(id: string) {
-  return (await read()).users.find((u) => u.id === id) ?? null;
+  return db().get<User>("users", { id });
 }
 export function createUser(user: User) {
-  return mutate((db) => {
-    if (db.users.some((u) => u.email === user.email)) throw new Error("EMAIL_TAKEN");
+  return db().tx(async (t) => {
+    if (await t.get("users", { email: user.email })) throw new Error("EMAIL_TAKEN");
     // Brands created before accounts existed belong to the very first account.
-    if (db.users.length === 0) for (const b of db.brands) if (!b.ownerId) b.ownerId = user.id;
-    db.users.push(user);
+    if (!(await t.find("users")).length) {
+      for (const b of await t.find<Brand>("brands")) if (!b.ownerId) await t.put("brands", b.id, { ...b, ownerId: user.id });
+    }
+    await t.put("users", user.id, user);
     return user;
   });
 }
 export function setPassword(userId: string, passwordHash: string) {
-  return mutate((db) => {
-    const u = db.users.find((x) => x.id === userId);
+  return db().tx(async (t) => {
+    const u = await t.get<User>("users", { id: userId });
     if (!u) throw new Error("NO_USER");
-    u.passwordHash = passwordHash;
+    await t.put("users", u.id, { ...u, passwordHash });
     // Log out everywhere and burn any other reset links.
-    db.sessions = db.sessions.filter((s) => s.userId !== userId);
-    db.resets = db.resets.filter((r) => r.userId !== userId);
-    db.oauthTokens = db.oauthTokens.filter((t) => t.userId !== userId);
+    await t.del("sessions", { userId });
+    await t.del("resets", { userId });
+    await t.del("oauthTokens", { userId });
   });
 }
 export function saveReset(reset: PasswordReset) {
-  return mutate((db) => {
-    const now = new Date().toISOString();
-    db.resets = db.resets.filter((r) => r.expiresAt > now && r.userId !== reset.userId);
-    db.resets.push(reset);
+  return db().tx(async (t) => {
+    await t.delExpired("resets");
+    await t.del("resets", { userId: reset.userId });
+    await t.put("resets", keyOf("resets", { ...reset }), reset);
   });
 }
 export async function getReset(tokenHash: string) {
-  const r = (await read()).resets.find((x) => x.tokenHash === tokenHash);
-  return r && r.expiresAt > new Date().toISOString() ? r : null;
+  return live(await db().get<PasswordReset>("resets", { tokenHash }));
 }
 
-export function saveSession(session: Session) {
-  return mutate((db) => {
-    const now = new Date().toISOString();
-    db.sessions = db.sessions.filter((s) => s.expiresAt > now);
-    db.sessions.push(session);
-  });
+export async function saveSession(session: Session) {
+  // Clean up now and then rather than on every login.
+  if (Math.random() < 0.05) await db().delExpired("sessions");
+  await db().put("sessions", session.tokenHash, session);
 }
 export async function getSession(tokenHash: string) {
-  const s = (await read()).sessions.find((x) => x.tokenHash === tokenHash);
-  return s && s.expiresAt > new Date().toISOString() ? s : null;
+  return live(await db().get<Session>("sessions", { tokenHash }));
 }
 export function deleteSession(tokenHash: string) {
-  return mutate((db) => {
-    db.sessions = db.sessions.filter((s) => s.tokenHash !== tokenHash);
-  });
+  return db().del("sessions", { tokenHash });
 }
 
-/** Remove a user and everything they own. Returns stored file names so the caller can delete them from disk. */
+/** Remove a user and everything they own. Returns stored file names so the caller can delete the files. */
 export function deleteUserCascade(userId: string) {
-  return mutate((db) => {
-    const brandIds = new Set(db.brands.filter((b) => b.ownerId === userId).map((b) => b.id));
-    const uploads = db.media.filter((m) => brandIds.has(m.brandId)).map((m) => m.fileName);
-    const renders = db.reels.filter((r) => brandIds.has(r.brandId) && r.renderFile).map((r) => r.renderFile as string);
-    db.users = db.users.filter((u) => u.id !== userId);
-    db.sessions = db.sessions.filter((s) => s.userId !== userId);
-    db.resets = db.resets.filter((r) => r.userId !== userId);
-    db.brands = db.brands.filter((b) => !brandIds.has(b.id));
-    db.media = db.media.filter((m) => !brandIds.has(m.brandId));
-    db.reels = db.reels.filter((r) => !brandIds.has(r.brandId));
-    db.plans = db.plans.filter((p) => !brandIds.has(p.brandId));
-    db.oauthCodes = db.oauthCodes.filter((c) => c.userId !== userId);
-    db.oauthTokens = db.oauthTokens.filter((t) => t.userId !== userId);
-    db.connections = (db.connections ?? []).filter((c) => c.ownerId !== userId);
-    return { uploads, renders, brands: brandIds.size };
+  return db().tx(async (t) => {
+    const brands = await t.find<Brand>("brands", { ownerId: userId });
+    const uploads: string[] = [];
+    const renders: string[] = [];
+    for (const b of brands) {
+      uploads.push(...(await t.find<MediaItem>("media", { brandId: b.id })).map((m) => m.fileName));
+      renders.push(...(await t.find<Reel>("reels", { brandId: b.id })).filter((r) => r.renderFile).map((r) => r.renderFile!));
+      for (const c of ["media", "reels", "plans", "connections"] as const) await t.del(c, { brandId: b.id });
+      await t.del("brands", { id: b.id });
+    }
+    await t.del("users", { id: userId });
+    for (const c of ["sessions", "resets", "oauthCodes", "oauthTokens"] as const) await t.del(c, { userId });
+    await t.del("connections", { ownerId: userId });
+    return { uploads, renders, brands: brands.length };
   });
 }
 
 // Brands
 export async function listBrands(ownerId: string) {
-  return (await read()).brands
-    .filter((b) => b.ownerId === ownerId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return newestFirst(await db().find<Brand>("brands", { ownerId }));
 }
 export async function getBrand(id: string) {
-  return (await read()).brands.find((b) => b.id === id) ?? null;
+  return db().get<Brand>("brands", { id });
 }
-export function saveBrand(brand: Brand) {
-  return mutate((db) => {
-    const i = db.brands.findIndex((b) => b.id === brand.id);
-    if (i >= 0) db.brands[i] = brand;
-    else db.brands.push(brand);
-    return brand;
-  });
+export async function saveBrand(brand: Brand) {
+  await db().put("brands", brand.id, brand);
+  return brand;
 }
 
 // Media
 export async function listMedia(brandId: string) {
-  return (await read()).media
-    .filter((m) => m.brandId === brandId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return newestFirst(await db().find<MediaItem>("media", { brandId }));
 }
 export async function getMedia(id: string) {
-  return (await read()).media.find((m) => m.id === id) ?? null;
+  return db().get<MediaItem>("media", { id });
 }
-export function saveMedia(item: MediaItem) {
-  return mutate((db) => {
-    db.media.push(item);
-    return item;
-  });
+export async function saveMedia(item: MediaItem) {
+  await db().put("media", item.id, item);
+  return item;
 }
 
 // Reels
 export async function listReels(brandId: string) {
-  return (await read()).reels
-    .filter((r) => r.brandId === brandId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return newestFirst(await db().find<Reel>("reels", { brandId }));
 }
 export async function getReel(id: string) {
-  return (await read()).reels.find((r) => r.id === id) ?? null;
+  return db().get<Reel>("reels", { id });
 }
-export function saveReel(reel: Reel) {
-  return mutate((db) => {
-    const i = db.reels.findIndex((r) => r.id === reel.id);
-    if (i >= 0) db.reels[i] = reel;
-    else db.reels.push(reel);
-    return reel;
-  });
+export async function saveReel(reel: Reel) {
+  const before = await getReel(reel.id);
+  await db().put("reels", reel.id, reel);
+  // An edit or a new render makes the old MP4 useless; don't keep paying to store it.
+  if (before?.renderFile && before.renderFile !== reel.renderFile) deleteFile("renders", before.renderFile).catch(() => {});
+  return reel;
 }
 
 // Plans
 export async function getPlan(brandId: string) {
-  return (await read()).plans.find((p) => p.brandId === brandId) ?? null;
+  return db().get<Plan>("plans", { brandId });
 }
-export function savePlan(plan: Plan) {
-  return mutate((db) => {
-    db.plans = db.plans.filter((p) => p.brandId !== plan.brandId);
-    db.plans.push(plan);
-    return plan;
-  });
+export async function savePlan(plan: Plan) {
+  await db().put("plans", plan.brandId, plan);
+  return plan;
 }
 
 // OAuth (connectors such as Claude)
-export function saveOAuthClient(client: OAuthClient) {
-  return mutate((db) => {
-    db.oauthClients.push(client);
-    return client;
-  });
+export async function saveOAuthClient(client: OAuthClient) {
+  await db().put("oauthClients", client.clientId, client);
+  return client;
 }
 export async function getOAuthClient(clientId: string) {
-  return (await read()).oauthClients.find((c) => c.clientId === clientId) ?? null;
+  return db().get<OAuthClient>("oauthClients", { clientId });
 }
 export function saveOAuthCode(code: OAuthCode) {
-  return mutate((db) => {
-    const now = new Date().toISOString();
-    db.oauthCodes = db.oauthCodes.filter((c) => c.expiresAt > now);
-    db.oauthCodes.push(code);
+  return db().tx(async (t) => {
+    await t.delExpired("oauthCodes");
+    await t.put("oauthCodes", code.codeHash, code);
   });
 }
 /** Returns the code and deletes it, so each code works once. */
 export function consumeOAuthCode(codeHash: string) {
-  return mutate((db) => {
-    const code = db.oauthCodes.find((c) => c.codeHash === codeHash) ?? null;
-    db.oauthCodes = db.oauthCodes.filter((c) => c.codeHash !== codeHash);
-    return code && code.expiresAt > new Date().toISOString() ? code : null;
+  return db().tx(async (t) => {
+    const code = await t.get<OAuthCode>("oauthCodes", { codeHash });
+    if (code) await t.del("oauthCodes", { codeHash });
+    return live(code);
   });
 }
 export function saveOAuthTokens(tokens: OAuthToken[]) {
-  return mutate((db) => {
-    const now = new Date().toISOString();
-    db.oauthTokens = db.oauthTokens.filter((t) => t.expiresAt > now);
-    db.oauthTokens.push(...tokens);
+  return db().tx(async (t: Tx) => {
+    await t.delExpired("oauthTokens");
+    for (const tok of tokens) await t.put("oauthTokens", keyOf("oauthTokens", { ...tok }), tok);
   });
 }
 export async function getOAuthToken(tokenHash: string, kind: OAuthToken["kind"]) {
-  const t = (await read()).oauthTokens.find((x) => x.tokenHash === tokenHash && x.kind === kind);
-  return t && t.expiresAt > new Date().toISOString() ? t : null;
+  return live(await db().get<OAuthToken>("oauthTokens", { tokenHash, kind }));
 }
 export function deleteOAuthToken(tokenHash: string) {
-  return mutate((db) => {
-    db.oauthTokens = db.oauthTokens.filter((t) => t.tokenHash !== tokenHash);
-  });
+  return db().del("oauthTokens", { tokenHash });
 }
 /** Apps the user has connected (one entry per client with a live refresh token). */
 export async function listConnectedClients(userId: string) {
-  const db = await read();
   const now = new Date().toISOString();
-  const ids = new Set(db.oauthTokens.filter((t) => t.userId === userId && t.kind === "refresh" && t.expiresAt > now).map((t) => t.clientId));
-  return db.oauthClients.filter((c) => ids.has(c.clientId)).map((c) => ({ clientId: c.clientId, name: c.name, createdAt: c.createdAt }));
+  const tokens = await db().find<OAuthToken>("oauthTokens", { userId, kind: "refresh" });
+  const ids = [...new Set(tokens.filter((t) => t.expiresAt > now).map((t) => t.clientId))];
+  const clients = await Promise.all(ids.map((clientId) => getOAuthClient(clientId)));
+  return clients.filter((c): c is OAuthClient => !!c).map((c) => ({ clientId: c.clientId, name: c.name, createdAt: c.createdAt }));
 }
 export function revokeUserTokens(userId: string, clientId?: string) {
-  return mutate((db) => {
-    db.oauthTokens = db.oauthTokens.filter((t) => !(t.userId === userId && (!clientId || t.clientId === clientId)));
-  });
+  return db().del("oauthTokens", clientId ? { userId, clientId } : { userId });
 }
 
-// Social connections (TikTok, …) – one per brand and provider
+// Social connections (TikTok, Meta, …) – one per brand and provider
 export async function getConnection(brandId: string, provider: SocialProvider) {
-  return ((await read()).connections ?? []).find((c) => c.brandId === brandId && c.provider === provider) ?? null;
+  return db().get<SocialConnection>("connections", { brandId, provider });
 }
 export async function listConnections(brandId: string) {
-  return ((await read()).connections ?? []).filter((c) => c.brandId === brandId);
+  return db().find<SocialConnection>("connections", { brandId });
 }
-export function saveConnection(conn: SocialConnection) {
-  return mutate((db) => {
-    db.connections ??= [];
-    db.connections = db.connections.filter((c) => !(c.brandId === conn.brandId && c.provider === conn.provider));
-    db.connections.push(conn);
-    return conn;
-  });
+export async function saveConnection(conn: SocialConnection) {
+  await db().put("connections", `${conn.brandId}:${conn.provider}`, conn);
+  return conn;
 }
 export function deleteConnection(brandId: string, provider: SocialProvider) {
-  return mutate((db) => {
-    db.connections = (db.connections ?? []).filter((c) => !(c.brandId === brandId && c.provider === provider));
+  return db().del("connections", { brandId, provider });
+}
+
+// Small server settings (e.g. the signing secret)
+export async function getSetting<T>(id: string) {
+  return (await db().get<{ id: string; value: T }>("settings", { id }))?.value ?? null;
+}
+/** Stores the value unless one exists already; returns whichever is stored. */
+export function initSetting<T>(id: string, value: T) {
+  return db().tx(async (t) => {
+    const existing = await t.get<{ id: string; value: T }>("settings", { id });
+    if (existing) return existing.value;
+    await t.put("settings", id, { id, value });
+    return value;
   });
+}
+export async function setSetting<T>(id: string, value: T) {
+  await db().put("settings", id, { id, value });
 }

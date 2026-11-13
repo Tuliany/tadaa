@@ -2,7 +2,7 @@ import { z } from "zod";
 import { handle, HttpError, requireReel } from "@/lib/auth";
 import { getConnection, getReel, saveReel } from "@/lib/db";
 import { hasRender, startRender } from "@/lib/render";
-import { renderPath } from "@/lib/storage";
+import { localFile } from "@/lib/storage";
 import { reelDuration, FPS } from "@/lib/templates";
 import { accessToken, creatorInfo, publishVideo } from "@/lib/tiktok";
 import type { Publication, Reel } from "@/lib/types";
@@ -64,7 +64,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
     current = (await getReel(reel.id)) ?? reel;
   }
 
-  const publishId = await publishVideo(token, renderPath(current.renderFile!), {
+  const publishId = await publishVideo(token, await localFile("renders", current.renderFile!), {
     title: s.title,
     privacyLevel: s.privacyLevel,
     allowComment: s.allowComment && !info.comment_disabled,

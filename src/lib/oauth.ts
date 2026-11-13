@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
-import { DATA_DIR, getOAuthToken, getUser, saveOAuthTokens } from "./db";
+import { DATA_DIR, getOAuthToken, getUser, initSetting, saveOAuthTokens } from "./db";
 import { publicOrigin } from "./email";
 
 /**
@@ -110,24 +110,18 @@ export const CORS = {
 
 let secret: Buffer | null = null;
 
-/** A server secret kept on the data volume, so signed links survive redeploys. */
+/** A server secret kept in the database (or TADAA_SECRET), so signed links survive redeploys. */
 async function serverSecret() {
   if (secret) return secret;
   if (process.env.TADAA_SECRET) return (secret = Buffer.from(process.env.TADAA_SECRET));
-  const file = path.join(DATA_DIR, "secret.key");
+  // Carry over the secret from the old data volume so links already sent keep working.
+  let initial = randomBytes(32).toString("base64");
   try {
-    secret = await fs.readFile(file);
+    initial = (await fs.readFile(path.join(DATA_DIR, "secret.key"))).toString("base64");
   } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const fresh = randomBytes(32);
-    try {
-      await fs.writeFile(file, fresh, { flag: "wx" });
-      secret = fresh;
-    } catch {
-      secret = await fs.readFile(file);
-    }
+    /* none */
   }
-  return secret;
+  return (secret = Buffer.from(await initSetting("signingSecret", initial), "base64"));
 }
 
 export async function signDownload(reelId: string, ttlDays = 7) {

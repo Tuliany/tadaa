@@ -5,7 +5,7 @@ import path from "path";
 import { renderToken } from "./auth";
 import { getReel, listMedia, saveReel } from "./db";
 import { toRenderProps } from "./props";
-import { RENDER_DIR, renderPath } from "./storage";
+import { fileSize, renderScratchPath, saveFile } from "./storage";
 import type { Brand, Reel } from "./types";
 
 /** In-flight renders, shared by the web app and the Claude connector. */
@@ -46,15 +46,10 @@ function runRender(propsFile: string, outFile: string, onProgress?: (pct: number
   });
 }
 
-/** True if the Reel already has an MP4 on disk. */
+/** True if the Reel's MP4 is stored. */
 export async function hasRender(reel: Reel) {
   if (!reel.renderFile) return false;
-  try {
-    await fs.access(renderPath(reel.renderFile));
-    return true;
-  } catch {
-    return false;
-  }
+  return (await fileSize("renders", reel.renderFile).catch(() => null)) !== null;
 }
 
 export function renderState(reelId: string): "rendering" | "failed" | "idle" {
@@ -82,13 +77,14 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
     const withToken = (u?: string) => (u && u.startsWith(`${origin}/api/media/`) ? `${u}?rt=${renderToken()}` : u);
     props.media = props.media.map((m) => ({ ...m, url: withToken(m.url)! }));
     props.brand = { ...props.brand, logoUrl: withToken(props.brand.logoUrl) };
-    await fs.mkdir(RENDER_DIR, { recursive: true });
     const propsFile = path.join(os.tmpdir(), `tadaa-${id}-${Date.now()}.json`);
     await fs.writeFile(propsFile, JSON.stringify(props));
     const fileName = `${id}-${Date.now()}.mp4`;
+    const out = await renderScratchPath(fileName);
     try {
       progress.set(id, 0);
-      await runRender(propsFile, renderPath(fileName), (pct) => progress.set(id, pct));
+      await runRender(propsFile, out, (pct) => progress.set(id, pct));
+      await saveFile("renders", fileName, out);
     } finally {
       fs.unlink(propsFile).catch(() => {});
     }

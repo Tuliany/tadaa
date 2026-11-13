@@ -3,7 +3,7 @@ import { handle, HttpError, requireReel } from "@/lib/auth";
 import { getConnection, getReel, saveReel } from "@/lib/db";
 import { accessToken, postUrl, publishVideo } from "@/lib/linkedin";
 import { hasRender, startRender } from "@/lib/render";
-import { renderPath } from "@/lib/storage";
+import { localFile } from "@/lib/storage";
 import type { Publication, Reel } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -31,7 +31,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
     current = (await getReel(reel.id)) ?? reel;
   }
 
-  const { postUrn, videoUrn } = await publishVideo(conn, token, renderPath(current.renderFile!), parsed.data.text, reel.script.hook || brand.name);
+  const { postUrn, videoUrn } = await publishVideo(conn, token, await localFile("renders", current.renderFile!), parsed.data.text, reel.script.hook || brand.name);
   const now = new Date().toISOString();
   const pub: Publication = {
     provider: "linkedin",

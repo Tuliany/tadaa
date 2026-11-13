@@ -4,7 +4,7 @@ import { getConnection, getReel, saveReel } from "@/lib/db";
 import { selectedAccount } from "@/lib/instagram";
 import { publishFacebookReel, selectedPage, startInstagramReel } from "@/lib/meta";
 import { hasRender, startRender } from "@/lib/render";
-import { renderPath } from "@/lib/storage";
+import { localFile } from "@/lib/storage";
 import type { MetaPage, Publication, Reel, SocialProvider } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -45,7 +45,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
     }
     current = (await getReel(reel.id)) ?? reel;
   }
-  const file = renderPath(current.renderFile!);
+  const file = await localFile("renders", current.renderFile!);
   const now = new Date().toISOString();
   const pubs: Publication[] = [];
   const errors: string[] = [];
