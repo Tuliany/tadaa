@@ -5,17 +5,18 @@ import { api } from "@/lib/client";
 import type { MediaItem } from "@/lib/types";
 
 interface Hit {
-  id: number;
-  image: string;
+  id: string;
+  image?: string;
   duration: number;
   author: string;
   pageUrl: string;
   preview?: string;
+  portrait: boolean;
 }
 
 const SUGGESTIONS = ["surprised", "celebrating", "laughing", "facepalm", "thumbs up", "dancing", "coffee", "office"];
 
-/** Search licence-free vertical stock clips (Pexels) and add one to the brand's library. */
+/** Search licence-free vertical stock clips (Pixabay or Pexels) and add one to the brand's library. */
 export default function StockClipSearch({
   brandId,
   onImported,
@@ -26,15 +27,19 @@ export default function StockClipSearch({
   onError: (msg: string) => void;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [provider, setProvider] = useState("");
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [searching, setSearching] = useState(false);
-  const [importing, setImporting] = useState<number | null>(null);
+  const [importing, setImporting] = useState<string | null>(null);
 
   useEffect(() => {
-    api<{ available: boolean }>("/api/stock/videos")
-      .then((r) => setAvailable(r.available))
+    api<{ available: boolean; provider: string | null }>("/api/stock/videos")
+      .then((r) => {
+        setAvailable(r.available);
+        setProvider(r.provider ?? "");
+      })
       .catch(() => setAvailable(false));
   }, []);
 
@@ -101,7 +106,7 @@ export default function StockClipSearch({
           </button>
         ))}
       </div>
-      {hits && hits.length === 0 && <p className="mt-4 text-sm text-ink/50">No vertical clips for that. Try another word.</p>}
+      {hits && hits.length === 0 && <p className="mt-4 text-sm text-ink/50">No clips for that. Try another word.</p>}
       {hits && hits.length > 0 && (
         <div className="mt-4 grid grid-cols-3 sm:grid-cols-6 gap-2">
           {hits.map((h) => (
@@ -111,10 +116,14 @@ export default function StockClipSearch({
               onClick={() => use(h)}
               disabled={importing !== null}
               className="group relative aspect-[9/16] rounded-lg overflow-hidden bg-black/10"
-              title={`By ${h.author} on Pexels`}
+              title={`By ${h.author} on ${provider}`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={h.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              {h.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={h.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                h.preview && <video src={`${h.preview}#t=0.5`} muted playsInline preload="metadata" className="absolute inset-0 h-full w-full object-cover" />
+              )}
               {h.preview && (
                 <video
                   src={h.preview}
@@ -128,6 +137,7 @@ export default function StockClipSearch({
                 />
               )}
               <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1 text-[10px] text-white">{Math.round(h.duration)}s</span>
+              {!h.portrait && <span className="absolute top-1 left-1 rounded bg-black/60 px-1 text-[10px] text-white">wide</span>}
               {importing === h.id && <span className="absolute inset-0 grid place-items-center bg-black/50 text-xs font-bold text-white">Adding…</span>}
             </button>
           ))}
@@ -135,10 +145,10 @@ export default function StockClipSearch({
       )}
       <p className="mt-3 text-[11px] text-ink/45">
         Videos provided by{" "}
-        <a href="https://www.pexels.com" target="_blank" rel="noreferrer" className="underline">
-          Pexels
+        <a href={provider === "Pexels" ? "https://www.pexels.com" : "https://pixabay.com"} target="_blank" rel="noreferrer" className="underline">
+          {provider}
         </a>
-        . Free to use, but don&apos;t show the people in them in a bad light or as endorsing you.
+        . Free to use, but don&apos;t show the people in them in a bad light or as endorsing you. Wide clips get cropped to fit.
       </p>
     </div>
   );
