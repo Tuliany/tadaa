@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
+import StylePicker from "@/components/StylePicker";
+import { pickStyle, type StyleId } from "@/lib/styles";
 import { api, apiStream } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
-import type { Brand, Plan, PlanIdea, Reel } from "@/lib/types";
+import type { Brand, MediaItem, Plan, PlanIdea, Reel } from "@/lib/types";
 
 /** Ideas that are far enough along to show while the plan is still streaming. */
 function shownIdeas(partial: { ideas?: Partial<PlanIdea>[] }): PlanIdea[] {
@@ -37,12 +39,18 @@ export default function FirstReel() {
   const [picked, setPicked] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
   const [mediaIds, setMediaIds] = useState<string[]>([]);
+  const [style, setStyle] = useState<StyleId | null>(null);
+  const [library, setLibrary] = useState<MediaItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<Brand>(`/api/brands/${id}`).then(setBrand).catch((e) => setError(e.message));
+    api<Brand>(`/api/brands/${id}`)
+      .then((b) => {
+        setBrand(b);
+        setStyle((cur) => cur ?? pickStyle(b));
+      }).catch((e) => setError(e.message));
     (async () => {
       try {
         const existing = await api<Plan | null>(`/api/brands/${id}/plan`);
@@ -66,6 +74,18 @@ export default function FirstReel() {
   const idea = ideas?.[picked];
   const needsTwo = idea?.template === "beforeAfter" && mediaIds.length < 2;
 
+  // Default look for the brand; the library feeds the style previews (refreshed after uploads/imports).
+  useEffect(() => {
+    if (!library.length || mediaIds.some((mid) => !library.some((m) => m.id === mid))) {
+      api<MediaItem[]>(`/api/brands/${id}/media`).then(setLibrary).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, mediaIds]);
+  const previewMedia = useMemo(() => {
+    const picked = mediaIds.map((mid) => library.find((m) => m.id === mid)).filter((m): m is MediaItem => !!m);
+    return picked.length ? picked : library.filter((m) => m.kind === "image").slice(0, 3);
+  }, [mediaIds, library]);
+
   function updateIdea(i: number, patch: Partial<PlanIdea>) {
     setIdeas((list) => list?.map((x, j) => (j === i ? { ...x, ...patch } : x)) ?? null);
   }
@@ -77,7 +97,7 @@ export default function FirstReel() {
     try {
       const reel = await api<Reel>(`/api/brands/${id}/reels`, {
         method: "POST",
-        json: { topic: `${idea.title}: ${idea.hook}`, template: idea.template, mediaIds },
+        json: { topic: `${idea.title}: ${idea.hook}`, template: idea.template, mediaIds, style },
       });
       router.push(`/reels/${reel.id}`);
     } catch (e) {
@@ -170,6 +190,19 @@ export default function FirstReel() {
       >
         <MediaPicker brandId={id} template={idea?.template ?? "showcase"} selected={mediaIds} onChange={setMediaIds} onError={setError} />
       </Step>
+
+      {brand && style && (
+        <Step n={4} title="Pick how it should look" sub="Live previews with your colours and photos. You can change it later.">
+          <StylePicker
+            brand={brand}
+            template={idea?.template ?? "showcase"}
+            media={previewMedia}
+            value={style}
+            recommended={pickStyle(brand)}
+            onChange={setStyle}
+          />
+        </Step>
+      )}
 
       {error && <p className="rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
 
