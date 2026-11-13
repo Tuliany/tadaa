@@ -87,6 +87,11 @@ export default function Privacy() {
 
       <h3>Connected social accounts (Facebook and Instagram)</h3>
       <p>
+        If you use Connect Instagram, you log in with Instagram (or Facebook) and choose the Instagram professional account(s) to share. We receive
+        each account&apos;s id, username and profile picture and an access token scoped to those accounts, stored encrypted, and use them only to
+        show the connected account and publish the Reels you choose to post.
+      </p>
+      <p>
         If you connect with Facebook, we receive your Facebook user id and name, the list of Facebook Pages you choose to share with Tadaa
         (id, name, picture and a Page access token), and the Instagram professional account linked to each Page (id, username and profile
         picture). Tokens are stored encrypted. We use them only to show which Page and Instagram account are connected and to publish the Reels

@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import type { Reel } from "@/lib/types";
 
+interface IgConn {
+  available: boolean;
+  connected: boolean;
+  account: { id: string; username?: string; pictureUrl?: string } | null;
+}
+
 interface MetaConn {
   available: boolean;
   connected: boolean;
@@ -16,6 +22,7 @@ interface MetaConn {
 /** "Post to Instagram / Facebook" – publishes the approved Reel to the brand's chosen Page and its Instagram. */
 export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r: Reel) => void }) {
   const [conn, setConn] = useState<MetaConn | null>(null);
+  const [igConn, setIgConn] = useState<IgConn | null>(null);
   const [open, setOpen] = useState(false);
   const [caption, setCaption] = useState("");
   const [ig, setIg] = useState(true);
@@ -25,8 +32,11 @@ export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r:
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api<{ meta: MetaConn }>(`/api/brands/${reel.brandId}/connections`)
-      .then((c) => setConn(c.meta))
+    api<{ meta: MetaConn; instagram: IgConn }>(`/api/brands/${reel.brandId}/connections`)
+      .then((c) => {
+        setConn(c.meta);
+        setIgConn(c.instagram);
+      })
       .catch(() => setConn(null));
   }, [reel.brandId]);
 
@@ -43,25 +53,30 @@ export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r:
     return () => clearInterval(t);
   }, [processing, reel.id, onChange]);
 
-  if (!conn || !conn.available) return null;
+  if (!conn || !(conn.available || igConn?.available)) return null;
 
-  if (!conn.connected || !conn.page || conn.expired) {
+  const fbOk = conn.connected && !!conn.page && !conn.expired;
+  // Instagram: the directly connected account wins; otherwise the one linked to the Facebook Page.
+  const igName = igConn?.account?.username ?? (fbOk ? conn.instagram?.username : undefined);
+  const hasIg = !!igName;
+
+  if (!fbOk && !hasIg) {
     return (
       <Link href={`/brands/${reel.brandId}/accounts`} className="btn-ghost text-center">
-        {conn.expired ? "Reconnect Facebook to post from here" : "Connect Instagram & Facebook to post from here"}
+        {conn.expired ? "Reconnect Facebook to post from here" : "Connect Instagram or Facebook to post from here"}
       </Link>
     );
   }
 
-  const hasIg = !!conn.instagram;
   const hashtags = (caption.match(/#/g) ?? []).length;
   const wantIg = hasIg && ig;
-  const canPost = !busy && (wantIg || fb) && caption.length <= 2200 && hashtags <= 30;
+  const wantFb = fbOk && fb;
+  const canPost = !busy && (wantIg || wantFb) && caption.length <= 2200 && hashtags <= 30;
 
   function openPanel() {
     setCaption(`${reel.script.caption}\n\n${reel.script.hashtags.join(" ")}`.trim().slice(0, 2200));
     setIg(hasIg);
-    setFb(true);
+    setFb(fbOk);
     setShareToFeed(true);
     setError("");
     setOpen(true);
@@ -73,7 +88,7 @@ export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r:
     try {
       const r = await api<{ reel: Reel; errors: string[] }>(`/api/reels/${reel.id}/meta`, {
         method: "POST",
-        json: { caption, instagram: wantIg, facebook: fb, shareToFeed },
+        json: { caption, instagram: wantIg, facebook: wantFb, shareToFeed },
       });
       onChange(r.reel);
       if (r.errors.length) setError(r.errors.join(" "));
@@ -85,7 +100,7 @@ export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r:
     }
   }
 
-  const label = hasIg ? "Post to Instagram & Facebook" : "Post to Facebook";
+  const label = hasIg && fbOk ? "Post to Instagram & Facebook" : hasIg ? "Post to Instagram" : "Post to Facebook";
 
   return (
     <div className="grid gap-2">
@@ -137,10 +152,17 @@ export default function MetaPost({ reel, onChange }: { reel: Reel; onChange: (r:
                 disabled={!hasIg}
                 onChange={setIg}
                 logo="/logos/instagram.png"
-                title={hasIg ? `@${conn.instagram!.username}` : "Instagram"}
-                hint={hasIg ? "Instagram Reel" : `No Instagram professional account is linked to ${conn.page.name}.`}
+                title={hasIg ? `@${igName}` : "Instagram"}
+                hint={hasIg ? "Instagram Reel" : "Not connected – connect Instagram under Accounts."}
               />
-              <Target checked={fb} onChange={setFb} logo="/logos/facebook.png" title={conn.page.name} hint="Facebook Page Reel" />
+              <Target
+                checked={wantFb}
+                disabled={!fbOk}
+                onChange={setFb}
+                logo="/logos/facebook.png"
+                title={fbOk ? conn.page!.name : "Facebook Page"}
+                hint={fbOk ? "Facebook Page Reel" : "Not connected – connect Facebook under Accounts."}
+              />
             </div>
 
             <label className="block">

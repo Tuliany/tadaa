@@ -44,6 +44,10 @@ function creds() {
   return { id, secret };
 }
 
+export function creds2() {
+  return creds();
+}
+
 export function redirectUri(origin: string) {
   return `${origin}/api/connect/meta/callback`;
 }
@@ -60,14 +64,14 @@ export function authorizeUrl(origin: string, state: string) {
   return u.toString();
 }
 
-function friendly(message?: string, code?: number) {
+export function friendly(message?: string, code?: number) {
   if (code === 190) return "The Facebook connection has expired. Reconnect it under Accounts.";
   if (code === 10 || code === 200) return "Facebook didn't give Tadaa permission to do that. Reconnect and allow all the requested permissions.";
   if (code === 9 || code === 4 || code === 32) return "Facebook/Instagram is limiting requests right now. Try again in a few minutes.";
   return message || "Facebook request failed.";
 }
 
-async function graph<T>(path: string, init: { method?: string; params?: Record<string, string>; token?: string } = {}) {
+export async function graph<T>(path: string, init: { method?: string; params?: Record<string, string>; token?: string } = {}) {
   const url = new URL(`${GRAPH}${path}`);
   const body = new URLSearchParams(init.params ?? {});
   const method = init.method ?? "GET";

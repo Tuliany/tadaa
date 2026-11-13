@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { handle, HttpError, requireReel } from "@/lib/auth";
 import { getConnection, getReel, saveReel } from "@/lib/db";
+import { selectedAccount } from "@/lib/instagram";
 import { publishFacebookReel, selectedPage, startInstagramReel } from "@/lib/meta";
 import { hasRender, startRender } from "@/lib/render";
 import { renderPath } from "@/lib/storage";
-import type { Publication, Reel } from "@/lib/types";
+import type { MetaPage, Publication, Reel, SocialProvider } from "@/lib/types";
 
 export const maxDuration = 300;
 
@@ -25,10 +26,14 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
   if (reel.status !== "approved") throw new HttpError(400, "Approve the Reel before posting it.");
   if ((s.caption.match(/#/g) ?? []).length > 30) throw new HttpError(400, "Instagram allows at most 30 hashtags.");
 
-  const conn = await getConnection(brand.id, "meta");
-  if (!conn) throw new HttpError(400, "Connect Facebook first (Accounts → Facebook).");
-  const page = selectedPage(conn);
-  if (s.instagram && !page.igId) throw new HttpError(400, `The Page "${page.name}" has no Instagram professional account linked.`);
+  const [conn, igConn] = await Promise.all([getConnection(brand.id, "meta"), getConnection(brand.id, "instagram")]);
+  const page = conn ? selectedPage(conn) : null;
+  if (s.facebook && !page) throw new HttpError(400, "Connect Facebook first (Accounts → Facebook).");
+  // Instagram: the directly connected account wins; otherwise the Instagram linked to the Facebook Page.
+  let ig: { acc: MetaPage; via: SocialProvider } | null = null;
+  if (igConn) ig = { acc: selectedAccount(igConn), via: "instagram" };
+  else if (page?.igId) ig = { acc: page, via: "meta" };
+  if (s.instagram && !ig) throw new HttpError(400, "Connect Instagram first (Accounts → Instagram).");
 
   let current: Reel = reel;
   if (!(await hasRender(reel))) {
@@ -47,16 +52,25 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
 
   if (s.instagram) {
     try {
-      const id = await startInstagramReel(page, file, s.caption, s.shareToFeed);
-      pubs.push({ provider: "instagram", accountName: page.igUsername ? `@${page.igUsername}` : page.name, publishId: id, privacy: "PUBLIC", status: "processing", createdAt: now, updatedAt: now });
+      const id = await startInstagramReel(ig!.acc, file, s.caption, s.shareToFeed);
+      pubs.push({
+        provider: "instagram",
+        accountName: ig!.acc.igUsername ? `@${ig!.acc.igUsername}` : ig!.acc.name,
+        publishId: id,
+        privacy: "PUBLIC",
+        status: "processing",
+        via: ig!.via,
+        createdAt: now,
+        updatedAt: now,
+      });
     } catch (e) {
       errors.push(`Instagram: ${(e as Error).message}`);
     }
   }
   if (s.facebook) {
     try {
-      const id = await publishFacebookReel(page, file, s.caption);
-      pubs.push({ provider: "facebook", accountName: page.name, publishId: id, privacy: "PUBLIC", status: "processing", createdAt: now, updatedAt: now });
+      const id = await publishFacebookReel(page!, file, s.caption);
+      pubs.push({ provider: "facebook", accountName: page!.name, publishId: id, privacy: "PUBLIC", status: "processing", createdAt: now, updatedAt: now });
     } catch (e) {
       errors.push(`Facebook: ${(e as Error).message}`);
     }

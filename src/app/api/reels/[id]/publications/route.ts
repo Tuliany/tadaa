@@ -10,8 +10,17 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[i
   const pending = (reel.publications ?? []).filter((p) => p.status === "processing");
   if (!pending.length) return Response.json(reel);
 
-  const [tt, meta] = await Promise.all([getConnection(brand.id, "tiktok"), getConnection(brand.id, "meta")]);
+  const [tt, meta, ig] = await Promise.all([
+    getConnection(brand.id, "tiktok"),
+    getConnection(brand.id, "meta"),
+    getConnection(brand.id, "instagram"),
+  ]);
   const page = meta?.pages?.find((p) => p.id === meta.selectedPageId);
+  // Instagram posts are checked with the connection that started them.
+  const igFor = (via?: string) => {
+    const conn = via === "instagram" ? ig : via === "meta" ? meta : (ig ?? meta);
+    return conn?.pages?.find((p) => p.id === conn.selectedPageId && p.igId);
+  };
   const updates = new Map<string, Partial<Publication>>();
 
   for (const p of pending) {
@@ -21,8 +30,8 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[i
         if (st.status === "PUBLISH_COMPLETE" || st.status === "SEND_TO_USER_INBOX") {
           updates.set(p.publishId, { status: "published", postId: st.publicaly_available_post_id?.[0]?.toString() });
         } else if (st.status === "FAILED") updates.set(p.publishId, { status: "failed", error: st.fail_reason || "TikTok couldn't publish the video." });
-      } else if (p.provider === "instagram" && page) {
-        const r = await advanceInstagramReel(page, p.publishId);
+      } else if (p.provider === "instagram" && igFor(p.via)) {
+        const r = await advanceInstagramReel(igFor(p.via)!, p.publishId);
         if (r.state === "published") updates.set(p.publishId, { status: "published", postId: r.postId, permalink: r.permalink });
         else if (r.state === "failed") updates.set(p.publishId, { status: "failed", error: r.error });
       } else if (p.provider === "facebook" && page) {

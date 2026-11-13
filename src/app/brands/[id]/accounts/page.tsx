@@ -203,6 +203,108 @@ function TikTokCard() {
   );
 }
 
+interface IgState {
+  available: boolean;
+  connected: boolean;
+  accounts: { id: string; username?: string; pictureUrl?: string }[];
+  selectedId?: string;
+  account: { id: string; username?: string; pictureUrl?: string } | null;
+}
+
+function InstagramCard() {
+  const { id } = useParams<{ id: string }>();
+  const params = useSearchParams();
+  const [ig, setIg] = useState<IgState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const result = params.get("instagram");
+  const message = params.get("message");
+
+  const load = () =>
+    api<{ instagram: IgState }>(`/api/brands/${id}/connections`)
+      .then((r) => setIg(r.instagram))
+      .catch(() => {});
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function disconnect() {
+    if (!confirm("Disconnect Instagram? Tadaa will no longer be able to post to this account.")) return;
+    setBusy(true);
+    await api(`/api/brands/${id}/connections?provider=instagram`, { method: "DELETE" }).catch(() => {});
+    await load();
+    setBusy(false);
+  }
+
+  async function choose(accId: string) {
+    setBusy(true);
+    await api(`/api/brands/${id}/connections`, { method: "PATCH", json: { provider: "instagram", pageId: accId } }).catch(() => {});
+    await load();
+    setBusy(false);
+  }
+
+  const connectUrl = `/api/connect/instagram/start?brandId=${id}`;
+
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-center gap-3">
+        <Logo slug="instagram" emoji="📸" />
+        <div className="min-w-0">
+          <p className="font-bold text-lg">Instagram</p>
+          <p className={`text-xs font-semibold truncate ${ig?.connected ? "text-green-600" : "text-ink/40"}`}>
+            {ig?.connected ? (ig.account?.username ? `Connected · @${ig.account.username}` : "Connected") : "Not connected"}
+          </p>
+        </div>
+        {ig?.account?.pictureUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={ig.account.pictureUrl} alt="" className="ml-auto h-9 w-9 rounded-full" />
+        )}
+      </div>
+      <p className="mt-3 text-sm text-ink/70">Post approved Reels to Instagram. Log in with Instagram – no Facebook account or Page needed.</p>
+      <p className="mt-1 text-xs text-ink/45">
+        Needs: a Business or Creator account. Personal account? Switch for free in the Instagram app: Settings → Account type and tools →
+        Switch to professional account.
+      </p>
+      {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Instagram connected ✓</p>}
+      {result === "noaccounts" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</p>}
+      {result === "error" && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t connect Instagram: {message}</p>}
+
+      {ig?.connected && ig.accounts.length > 1 && (
+        <div className="mt-4 space-y-2">
+          <span className="label">Post as</span>
+          {ig.accounts.map((a) => (
+            <label key={a.id} className="flex items-center gap-3 rounded-xl border border-ink/10 px-3 py-2 text-sm">
+              <input type="radio" className="accent-coral" name="igAccount" checked={ig.selectedId === a.id} disabled={busy} onChange={() => choose(a.id)} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {a.pictureUrl && <img src={a.pictureUrl} alt="" className="h-7 w-7 rounded-full" />}
+              <span className="font-semibold">@{a.username}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {ig && !ig.available ? (
+        <button className="btn-ghost mt-4 self-start" disabled title="Coming soon">
+          Connect · coming soon
+        </button>
+      ) : ig?.connected ? (
+        <div className="mt-4 flex gap-2">
+          <a className="btn-ghost" href={connectUrl}>
+            Reconnect
+          </a>
+          <button className="btn-ghost" onClick={disconnect} disabled={busy}>
+            {busy ? "…" : "Disconnect"}
+          </button>
+        </div>
+      ) : (
+        <a className="btn-dark mt-4 self-start" href={connectUrl}>
+          Connect Instagram
+        </a>
+      )}
+    </div>
+  );
+}
+
 interface MetaState {
   available: boolean;
   connected: boolean;
@@ -232,7 +334,7 @@ function MetaCard() {
   }, [id]);
 
   async function disconnect() {
-    if (!confirm("Disconnect Instagram & Facebook? Tadaa will no longer be able to post to them.")) return;
+    if (!confirm("Disconnect Facebook? Tadaa will no longer be able to post to your Page.")) return;
     setBusy(true);
     await api(`/api/brands/${id}/connections?provider=meta`, { method: "DELETE" }).catch(() => {});
     await load();
@@ -249,28 +351,30 @@ function MetaCard() {
   const connectUrl = `/api/connect/meta/start?brandId=${id}`;
 
   return (
-    <div className="card p-5 flex flex-col md:col-span-2">
+    <div className="card p-5 flex flex-col">
       <div className="flex items-center gap-3">
-        <Logo slug="instagram" emoji="📸" />
         <Logo slug="facebook" emoji="📘" />
         <div className="min-w-0">
-          <p className="font-bold text-lg">Instagram &amp; Facebook</p>
+          <p className="font-bold text-lg">Facebook Page</p>
           <p className={`text-xs font-semibold truncate ${m?.connected && !m.expired ? "text-green-600" : "text-ink/40"}`}>
             {m?.connected
               ? m.expired
                 ? "Connection expired – reconnect"
-                : `Connected · ${m.page?.name ?? m.displayName}${m.instagram ? ` · @${m.instagram.username}` : ""}`
+                : `Posts to Page: ${m.page?.name ?? "choose a Page below"}`
               : "Not connected"}
           </p>
         </div>
       </div>
       <p className="mt-3 text-sm text-ink/70">
-        Post approved Reels to your Facebook Page and the Instagram professional account linked to it – one login for both.
+        Post approved Reels to a Facebook Page you manage. If an Instagram account is linked to the Page, you can post there too.
       </p>
-      <p className="mt-1 text-xs text-ink/45">
-        Needs: a Facebook Page you manage. For Instagram, a Business or Creator account linked to that Page.
-      </p>
-      {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Instagram &amp; Facebook connected ✓</p>}
+      {m?.connected && m.displayName && (
+        <p className="mt-1 text-xs text-ink/55">
+          Signed in as {m.displayName}. Tadaa posts only to the Page you choose – never to your personal profile.
+        </p>
+      )}
+      <p className="mt-1 text-xs text-ink/45">Needs: a Facebook Page you manage.</p>
+      {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">Facebook connected ✓</p>}
       {result === "nopages" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</p>}
       {result === "error" && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t connect: {message}</p>}
 
@@ -322,6 +426,9 @@ export default function Accounts() {
       <p className="mt-1 text-ink/60">Connect where your brand lives. Everything is optional – Tadaa makes Reels without any of these.</p>
       <div className="mt-8 grid md:grid-cols-2 gap-4">
         <ClaudeCard />
+        <Suspense>
+          <InstagramCard />
+        </Suspense>
         <Suspense>
           <MetaCard />
         </Suspense>

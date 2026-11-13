@@ -104,7 +104,7 @@ export interface Reel {
   updatedAt: string;
 }
 
-export type SocialProvider = "tiktok" | "meta";
+export type SocialProvider = "tiktok" | "meta" | "instagram";
 
 /** A Facebook Page the user manages, with its linked Instagram professional account (if any). */
 export interface MetaPage {
@@ -153,6 +153,8 @@ export interface Publication {
   postId?: string;
   /** Link to the live post, when the platform gives one. */
   permalink?: string;
+  /** Which connection posted it (Instagram can come from "Connect Instagram" or from a Facebook Page). */
+  via?: SocialProvider;
   createdAt: string;
   updatedAt: string;
 }
