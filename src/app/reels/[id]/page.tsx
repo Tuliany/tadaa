@@ -11,11 +11,14 @@ import { api } from "@/lib/client";
 import { toRenderProps } from "@/lib/props";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, ReelScript } from "@/lib/types";
+import { pickStyle, type StyleId } from "@/lib/styles";
 
 const ReelPlayer = dynamic(() => import("@/components/ReelPlayer"), {
   ssr: false,
   loading: () => <div className="mx-auto w-full max-w-[340px] aspect-[9/16] rounded-[28px] bg-black/10 animate-pulse" />,
 });
+
+const StylePicker = dynamic(() => import("@/components/StylePicker"), { ssr: false });
 
 export default function ReelPage() {
   const { id } = useParams<{ id: string }>();
@@ -166,6 +169,23 @@ export default function ReelPage() {
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="card p-5">
+            <h2 className="font-bold">Look</h2>
+            <div className="mt-3">
+              <StylePicker
+                brand={brand}
+                template={reel.script.template}
+                media={reel.mediaIds.map((mid) => media.find((m) => m.id === mid)).filter((m): m is MediaItem => !!m)}
+                value={reel.script.style ?? "bold"}
+                recommended={pickStyle(brand)}
+                onChange={(style: StyleId) =>
+                  run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: { style } } })))
+                }
+              />
+            </div>
+            {reel.status === "approved" && <p className="mt-2 text-xs text-ink/45">Changing the look moves the Reel back to draft so you can approve the new version.</p>}
           </div>
 
           <div className="card p-5">

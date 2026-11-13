@@ -1,7 +1,8 @@
 import { nanoid } from "nanoid";
 import { writeReelScript } from "@/lib/ai";
 import { handle, HttpError, requireBrand } from "@/lib/auth";
-import { listMedia, listReels, saveReel } from "@/lib/db";
+import { listMedia, listReels, saveBrand, saveReel } from "@/lib/db";
+import { isStyleId, pickStyle } from "@/lib/styles";
 import { TEMPLATES } from "@/lib/templates";
 import type { Reel, TemplateId } from "@/lib/types";
 
@@ -16,7 +17,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
   const { brand } = await requireBrand((await ctx.params).id);
   const id = brand.id;
 
-  const body = (await req.json()) as { topic?: string; template?: TemplateId; mediaIds?: string[] };
+  const body = (await req.json()) as { topic?: string; template?: TemplateId; mediaIds?: string[]; style?: string };
   const topic = body.topic?.trim();
   if (!topic) throw new HttpError(400, "Tell us what this Reel is about.");
   const template: TemplateId = body.template && body.template in TEMPLATES ? body.template : "showcase";
@@ -28,7 +29,10 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
   }
 
   try {
-    const script = await writeReelScript(brand, topic, template, media);
+    const style = isStyleId(body.style) ? body.style : pickStyle(brand);
+    const script = { ...(await writeReelScript(brand, topic, template, media)), style };
+    // Remember the look so the next Reel starts with it.
+    if (isStyleId(body.style) && brand.defaultStyle !== body.style) await saveBrand({ ...brand, defaultStyle: body.style });
     const now = new Date().toISOString();
     const reel: Reel = {
       id: nanoid(10),

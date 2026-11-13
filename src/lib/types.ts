@@ -54,6 +54,8 @@ export interface Brand {
   language: Language;
   /** Example Reels the owner wants to resemble (links). */
   referenceReels: string[];
+  /** The look last chosen for this brand's Reels (pre-selected next time). */
+  defaultStyle?: import("./styles").StyleId;
   createdAt: string;
 }
 
@@ -75,6 +77,8 @@ export interface Slide {
 
 export interface ReelScript {
   template: TemplateId;
+  /** Visual look (see src/lib/styles.ts); Bold Pop when missing. */
+  style?: import("./styles").StyleId;
   hook: string;
   slides: Slide[];
   cta: string;

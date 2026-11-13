@@ -1,3 +1,4 @@
+import { isStyleId } from "@/lib/styles";
 import { handle, requireReel } from "@/lib/auth";
 import { saveReel } from "@/lib/db";
 import type { Reel, ReelScript } from "@/lib/types";
@@ -16,6 +17,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
   if (body.status === "approved" || body.status === "draft") next.status = body.status;
   if (body.script) {
     next.script = { ...reel.script, ...body.script, template: reel.script.template };
+    if (body.script.style !== undefined && !isStyleId(body.script.style)) next.script.style = reel.script.style;
     next.status = "draft";
     next.renderFile = undefined;
   }

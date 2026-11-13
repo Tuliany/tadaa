@@ -1,3 +1,4 @@
+import { styleOf } from "./styles";
 import type { ReelScript, TemplateId } from "./types";
 
 export const FPS = 30;
@@ -36,6 +37,17 @@ export const TEMPLATES: Record<
   },
 };
 
-export function reelDuration(script: Pick<ReelScript, "slides">) {
-  return HOOK_FRAMES + script.slides.length * SLIDE_FRAMES + CTA_FRAMES;
+/** Frame lengths for a Reel, adjusted for its look's pace (Quick Cuts is faster, Calm Luxury slower). */
+export function timing(script: Pick<ReelScript, "style">) {
+  const pace = styleOf(script).pace;
+  return {
+    hook: Math.round(HOOK_FRAMES * Math.min(pace, 1.15)),
+    slide: Math.round(SLIDE_FRAMES * pace),
+    cta: Math.round(CTA_FRAMES * Math.min(Math.max(pace, 0.9), 1.15)),
+  };
+}
+
+export function reelDuration(script: Pick<ReelScript, "slides" | "style">) {
+  const t = timing(script);
+  return t.hook + script.slides.length * t.slide + t.cta;
 }

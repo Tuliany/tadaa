@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.7.0",
     "@remotion/bundler": "^4.0.542",
+    "@remotion/fonts": "^4.0.542",
     "@remotion/player": "^4.0.542",
     "@remotion/renderer": "^4.0.542",
     "cheerio": "^1.2.0",

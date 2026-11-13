@@ -1,6 +1,7 @@
 import { nanoid } from "nanoid";
 import { z } from "zod";
 import { generatePlan, reviseReelScript, writeReelScript } from "./ai";
+import { pickStyle } from "./styles";
 import { getBrand, getPlan, getReel, listBrands, listMedia, listReels, saveReel, savePlan } from "./db";
 import { signDownload } from "./oauth";
 import { hasRender, renderError, renderState, startRender } from "./render";
@@ -246,6 +247,7 @@ export const TOOLS = [
       } else {
         script = await writeReelScript(b, args.topic, template, chosen);
       }
+      script = { ...script, style: script.style ?? pickStyle(b) };
       if (template === "beforeAfter" && media.length < 2) {
         throw new ToolError("Before & After needs two photos: the before first, then the after. Pass them in media_ids.");
       }
