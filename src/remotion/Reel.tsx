@@ -10,7 +10,7 @@ import {
   useVideoConfig,
 } from "remotion";
 import type { ReelRenderProps, Slide } from "../lib/types";
-import { timing } from "../lib/templates";
+import { MEME_END_FRAMES, memeClipFrames, timing } from "../lib/templates";
 import { styleOf, type StyleSpec } from "../lib/styles";
 import { readableOn, textOn } from "../lib/color";
 import { FONTS } from "./fonts";
@@ -39,15 +39,34 @@ function Enter({ s, children }: { s: StyleSpec; children: React.ReactNode }) {
   return <AbsoluteFill style={style}>{children}</AbsoluteFill>;
 }
 
-function MediaLayer({ media, s, reverse = false, boost = 0 }: { media?: Media; s: StyleSpec; reverse?: boolean; boost?: number }) {
+function MediaLayer({
+  media,
+  s,
+  reverse = false,
+  boost = 0,
+  clipStart = 0,
+  sound = false,
+}: {
+  media?: Media;
+  s: StyleSpec;
+  reverse?: boolean;
+  boost?: number;
+  clipStart?: number;
+  sound?: boolean;
+}) {
   const frame = useCurrentFrame();
-  const { durationInFrames } = useVideoConfig();
+  const { durationInFrames, fps } = useVideoConfig();
   if (!media) return null;
   const m = s.motion + boost;
   const [from, to] = reverse ? [1 + m * 1.5, 1 + m * 0.5] : [1 + m * 0.5, 1 + m * 1.5];
   const scale = interpolate(frame, [0, durationInFrames], [from, to], { extrapolateRight: "clamp" });
   const style: React.CSSProperties = { width: "100%", height: "100%", objectFit: "cover", transform: `scale(${scale})`, filter: s.grade };
-  const el = media.kind === "video" ? <OffthreadVideo src={media.url} muted style={style} /> : <Img src={media.url} style={style} onError={ignoreImageError} />;
+  const el =
+    media.kind === "video" ? (
+      <OffthreadVideo src={media.url} muted={!sound} trimBefore={Math.max(0, Math.round(clipStart * fps))} style={style} />
+    ) : (
+      <Img src={media.url} style={style} onError={ignoreImageError} />
+    );
   if (!s.framed) return <AbsoluteFill>{el}</AbsoluteFill>;
   // Clean Minimal: photo inset with rounded corners on a calm background.
   return (
@@ -219,7 +238,7 @@ function SlideCard({ slide, index, props, s }: { slide: Slide; index: number; pr
   return (
     <Enter s={s}>
       <AbsoluteFill style={{ backgroundColor: bg }}>
-        <MediaLayer media={m} s={s} reverse={index % 2 === 1} />
+        <MediaLayer media={m} s={s} reverse={index % 2 === 1} clipStart={slide.clipStart} sound={!!script.sound} />
         {m && <Shade s={s} extra={classic && isTips ? 0.2 : 0} />}
         <AbsoluteFill style={place as React.CSSProperties}>
           <StyledText s={s} size={size} color={color} accent={brand.colors.primary} delay={s.transition === "slide" ? 6 : 0} forceShadow={classic && !onPill}>
@@ -330,9 +349,83 @@ function EndCard({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
   );
 }
 
+/** Meme: white caption bar on top, the clip below (with its sound), punchline near the end, small brand mark. */
+function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; clipFrames: number }) {
+  const frame = useCurrentFrame();
+  const { brand, script, media } = props;
+  const slide = script.slides[0];
+  const clip = media.find((m) => m.id === slide?.mediaId) ?? media[0];
+  const caption = script.hook;
+  const size = caption.length > 70 ? 62 : caption.length > 40 ? 72 : 84;
+  const punchAt = Math.max(0, clipFrames - 40);
+  const still = { ...s, motion: 0, grade: s.grade, framed: false };
+  return (
+    <AbsoluteFill style={{ background: "#fff" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 600,
+          padding: "150px 70px 40px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ fontFamily: fontOf(s), fontWeight: Math.max(s.weight, 700), fontSize: size, lineHeight: 1.15, color: "#111", textAlign: "center", letterSpacing: -0.5 }}>
+          {s.upper ? caption.toUpperCase() : caption}
+        </div>
+      </div>
+      <div style={{ position: "absolute", top: 600, left: 0, right: 0, bottom: 0, overflow: "hidden", background: "#000" }}>
+        <MediaLayer media={clip} s={still} clipStart={slide?.clipStart ?? 0} sound={script.sound !== false} />
+        {slide?.text && frame >= punchAt && (
+          <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: "0 60px 170px" }}>
+            <Sequence from={punchAt} layout="none">
+              <StyledText s={{ ...s, treatment: "outline", wordByWord: false, transition: "pop", upper: true }} size={80} color="#ffffff" accent={brand.colors.primary}>
+                {slide.text}
+              </StyledText>
+            </Sequence>
+          </AbsoluteFill>
+        )}
+        <div
+          style={{
+            position: "absolute",
+            right: 30,
+            bottom: 40,
+            fontFamily: fontOf(s),
+            fontWeight: 800,
+            fontSize: 34,
+            color: "#fff",
+            background: "rgba(0,0,0,0.45)",
+            padding: "8px 18px",
+            borderRadius: 999,
+          }}
+        >
+          {brand.name}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
 export const Reel: React.FC<ReelRenderProps> = (props) => {
   const { script } = props;
   const s = styleOf(script);
+  if (script.template === "meme") {
+    const clipFrames = memeClipFrames(script);
+    return (
+      <AbsoluteFill style={{ backgroundColor: "#fff" }}>
+        <Sequence durationInFrames={clipFrames}>
+          <Meme props={props} s={s} clipFrames={clipFrames} />
+        </Sequence>
+        <Sequence from={clipFrames} durationInFrames={MEME_END_FRAMES}>
+          <EndCard props={props} s={{ ...s, framed: true }} />
+        </Sequence>
+      </AbsoluteFill>
+    );
+  }
   const t = timing(script);
   const isBA = script.template === "beforeAfter" && props.media.length >= 2 && script.slides.length >= 2;
   const restStart = isBA ? 2 : 0;

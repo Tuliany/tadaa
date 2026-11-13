@@ -2,7 +2,8 @@ import { nanoid } from "nanoid";
 import path from "path";
 import sharp from "sharp";
 import { saveMedia } from "./db";
-import { saveUpload } from "./storage";
+import { probeDuration } from "./reference";
+import { saveUpload, uploadPath } from "./storage";
 import type { MediaItem } from "./types";
 
 export const MAX_MEDIA_BYTES = 200 * 1024 * 1024;
@@ -12,7 +13,13 @@ export function mediaKind(mimeType: string) {
 }
 
 /** Stores one photo or clip in the brand's library (photos shrunk to Reel size). */
-export async function importMedia(brandId: string, name: string, mime: string, input: Buffer): Promise<MediaItem | null> {
+export async function importMedia(
+  brandId: string,
+  name: string,
+  mime: string,
+  input: Buffer,
+  source?: MediaItem["source"],
+): Promise<MediaItem | null> {
   const kind = mediaKind(mime);
   if (!kind) return null;
   const mediaId = nanoid(12);
@@ -37,7 +44,8 @@ export async function importMedia(brandId: string, name: string, mime: string, i
   }
   const fileName = `${mediaId}${ext}`;
   await saveUpload(fileName, data);
-  const item: MediaItem = { id: mediaId, brandId, fileName, mimeType, kind, createdAt: new Date().toISOString() };
+  const duration = kind === "video" ? await probeDuration(uploadPath(fileName)) : undefined;
+  const item: MediaItem = { id: mediaId, brandId, fileName, mimeType, kind, ...(duration ? { duration } : {}), ...(source ? { source } : {}), createdAt: new Date().toISOString() };
   await saveMedia(item);
   return item;
 }

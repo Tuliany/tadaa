@@ -195,7 +195,7 @@ const scriptSchema = z.object({
   hook: z.string().max(90),
   slides: z
     .array(z.object({ text: z.string().max(110), mediaIndex: z.number().int().nullable().optional() }))
-    .min(2)
+    .min(1)
     .max(6),
   cta: z.string().max(60),
   caption: z.string().max(1200),
@@ -214,6 +214,18 @@ Language for all text: ${LANGUAGES[brand.language]}`;
 }
 
 function toScript(template: TemplateId, raw: z.infer<typeof scriptSchema>, media: MediaItem[]): ReelScript {
+  if (template === "meme") {
+    const clip = media.find((m) => m.kind === "video") ?? media[0];
+    return {
+      template,
+      hook: raw.hook,
+      slides: [{ text: raw.slides[0]?.text ?? "", mediaId: clip?.id, clipStart: 0, clipEnd: clip?.duration ? Math.min(clip.duration, 8) : undefined }],
+      cta: raw.cta,
+      caption: raw.caption,
+      hashtags: raw.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`).replace(/\s+/g, "")),
+      sound: true,
+    };
+  }
   return {
     template,
     hook: raw.hook,
@@ -240,7 +252,7 @@ Media available (by index): ${media.length ? media.map((m, i) => `${i}: ${m.kind
 
 Schema:
 {
-  "hook": string (max 8 words, on screen for 2 seconds),
+  "hook": string (${template === "meme" ? "the meme's top caption, max 16 words" : "max 8 words, on screen for 2 seconds"}),
   "slides": [{ "text": string (max 14 words), "mediaIndex": number | null }] (${t.slideCount}),
   "cta": string (max 6 words, end card),
   "caption": string (Instagram caption, 2-4 short lines, may use 1-2 emojis),
@@ -283,6 +295,7 @@ function mockScript(brand: Brand, topic: string, template: TemplateId, media: Me
     showcase: [`This is ${brand.name}`, topic, `Made for ${brand.audience.toLowerCase().replace(/\.$/, "")}`],
     beforeAfter: ["Before…", "…and after", `That's the ${brand.name} difference`],
     tips: offers.slice(0, 3).map((o, i) => `${i + 1}. ${o}`),
+    meme: ["Every. Single. Time."],
   };
   const slides = slidesByTemplate[template].map((text, i) => ({
     text,
@@ -290,7 +303,14 @@ function mockScript(brand: Brand, topic: string, template: TemplateId, media: Me
   }));
   return {
     template,
-    hook: template === "beforeAfter" ? "Wait for the after 👀" : template === "tips" ? `3 things to know about ${topic}` : `You need to see this`,
+    hook:
+      template === "meme"
+        ? `When someone asks what ${brand.name} actually does`
+        : template === "beforeAfter"
+          ? "Wait for the after 👀"
+          : template === "tips"
+            ? `3 things to know about ${topic}`
+            : `You need to see this`,
     slides,
     cta: "Follow for more",
     caption: `${topic} ✨\n${brand.description}`,
@@ -445,4 +465,31 @@ Return JSON:
       pace,
     }),
   };
+}
+
+// ---------- Meme captions ----------
+
+const memeSchema = z.object({ options: z.array(z.object({ caption: z.string().max(110), punchline: z.string().max(50) })).min(1).max(5) });
+
+/** Three caption ideas for a meme about the business (top caption + optional punchline). */
+export async function memeCaptions(brand: Brand, topic: string, clipHint: string): Promise<{ caption: string; punchline: string }[]> {
+  if (!aiEnabled()) {
+    return [
+      { caption: `When someone asks what ${brand.name} actually does`, punchline: "" },
+      { caption: "Me explaining our service for the 100th time today", punchline: "Worth it." },
+      { caption: "When the client says 'small change' on Friday at 4 pm", punchline: "" },
+    ];
+  }
+  const res = await askJson(
+    "You write funny, relatable meme captions for small businesses' social media. Self-aware and warm, never mean to customers, no offensive or political jokes, no claims the brand facts don't support.",
+    `${brandBrief(brand)}
+
+Topic or situation: ${topic || "(anything relatable about this business)"}
+What happens in the clip: ${clipHint || "(unknown – keep the caption general enough to fit a reaction clip)"}
+
+Write 3 different meme captions in the classic format: a top caption that sets up a relatable situation from the customers' or the team's point of view (e.g. "When…", "Me after…", "Nobody: / Our team:"), plus an optional short punchline shown at the end (may be empty).
+Schema: { "options": [{ "caption": string (max 16 words), "punchline": string (max 6 words, or "") }] }`,
+    memeSchema,
+  );
+  return res.options.slice(0, 3);
 }

@@ -28,6 +28,14 @@ export const TEMPLATES: Record<
     slideCount: "2-3 slides",
     mediaHint: "One before photo, then one after photo",
   },
+  meme: {
+    name: "Meme",
+    description: "Your clip with a funny caption on top – the classic social meme, about your business.",
+    scriptGuide:
+      "A meme: the hook is the top caption (the relatable setup, max 90 characters, e.g. 'When the client asks if it can be ready by Monday'). Exactly 1 slide using mediaIndex 0, whose text is an optional short punchline shown at the end (max 40 characters, may be empty). Keep it light, self-aware and on-brand; never mock customers.",
+    slideCount: "1 slide (the clip)",
+    mediaHint: "One short video clip (your own, or a licence-free stock clip)",
+  },
   tips: {
     name: "Tips list",
     description: "Numbered tips or facts that position you as the expert.",
@@ -47,7 +55,20 @@ export function timing(script: Pick<ReelScript, "style" | "styleOverrides">) {
   };
 }
 
-export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styleOverrides">) {
+export const MEME_END_FRAMES = 45; // 1.5 s logo card
+export const MEME_DEFAULT_SECONDS = 6;
+export const MEME_MAX_SECONDS = 20;
+
+/** Meme: how long the clip plays (from clipStart to clipEnd, capped). */
+export function memeClipFrames(script: Pick<ReelScript, "slides">) {
+  const s = script.slides[0];
+  const start = s?.clipStart ?? 0;
+  const len = s?.clipEnd != null && s.clipEnd > start ? s.clipEnd - start : MEME_DEFAULT_SECONDS;
+  return Math.round(Math.min(Math.max(len, 1), MEME_MAX_SECONDS) * FPS);
+}
+
+export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template">) {
+  if (script.template === "meme") return memeClipFrames(script) + MEME_END_FRAMES;
   const t = timing(script);
   return t.hook + script.slides.length * t.slide + t.cta;
 }

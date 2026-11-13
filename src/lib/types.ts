@@ -82,14 +82,22 @@ export interface MediaItem {
   fileName: string;
   mimeType: string;
   kind: "image" | "video";
+  /** Length of a video clip in seconds (when known). */
+  duration?: number;
+  /** Where it came from, e.g. "Pexels" stock (for attribution). */
+  source?: { name: string; url?: string; author?: string };
   createdAt: string;
 }
 
-export type TemplateId = "showcase" | "beforeAfter" | "tips";
+export type TemplateId = "showcase" | "beforeAfter" | "tips" | "meme";
 
 export interface Slide {
   text: string;
   mediaId?: string;
+  /** For video clips: where in the clip to start (seconds). */
+  clipStart?: number;
+  /** Meme only: where the clip ends (seconds). */
+  clipEnd?: number;
 }
 
 export interface ReelScript {
@@ -102,6 +110,8 @@ export interface ReelScript {
   referenceId?: string;
   hook: string;
   slides: Slide[];
+  /** Keep the clips' own sound (Meme default); otherwise clips are muted. */
+  sound?: boolean;
   cta: string;
   caption: string;
   hashtags: string[];

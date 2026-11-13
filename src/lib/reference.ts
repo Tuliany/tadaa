@@ -26,6 +26,17 @@ function run(cmd: string, args: string[], timeoutMs = 90_000): Promise<{ code: n
   });
 }
 
+/** Length of a video in seconds, or undefined if it can't be read. */
+export async function probeDuration(file: string): Promise<number | undefined> {
+  try {
+    const r = await run(FFPROBE, ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", file], 20_000);
+    const d = Number(r.out.trim());
+    return isFinite(d) && d > 0 ? Math.round(d * 100) / 100 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface VideoFacts {
   duration: number;
   /** Times (s) where the shot changes. */

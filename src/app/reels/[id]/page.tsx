@@ -4,11 +4,12 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import ClipTrimmer from "@/components/ClipTrimmer";
 import LinkedInPost from "@/components/LinkedInPost";
 import MetaPost from "@/components/MetaPost";
 import TikTokPost from "@/components/TikTokPost";
 import { api } from "@/lib/client";
-import { toRenderProps } from "@/lib/props";
+import { mediaUrl, toRenderProps } from "@/lib/props";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, ReelScript } from "@/lib/types";
 import { pickStyle } from "@/lib/styles";
@@ -172,6 +173,16 @@ export default function ReelPage() {
             )}
           </div>
 
+          <ClipsCard
+            script={editing ?? reel.script}
+            media={media}
+            saving={busy === "save"}
+            onPreview={(slides, sound) => setEditing({ ...(editing ?? structuredClone(reel.script)), slides, sound })}
+            dirty={!!editing}
+            onSave={saveEdits}
+          />
+
+          {reel.script.template !== "meme" && (
           <div className="card p-5">
             <h2 className="font-bold">Look</h2>
             <div className="mt-3">
@@ -189,6 +200,7 @@ export default function ReelPage() {
             </div>
             {reel.status === "approved" && <p className="mt-2 text-xs text-ink/45">Changing the look moves the Reel back to draft so you can approve the new version.</p>}
           </div>
+          )}
 
           <div className="card p-5">
             <div className="flex items-center justify-between">
@@ -203,11 +215,11 @@ export default function ReelPage() {
               )}
             </div>
             <div className="mt-3 space-y-2">
-              <TextRow label="Hook" value={s.hook} editing={!!editing} onChange={(v) => editing && setEditing({ ...editing, hook: v })} />
+              <TextRow label={s.template === "meme" ? "Caption" : "Hook"} value={s.hook} editing={!!editing} onChange={(v) => editing && setEditing({ ...editing, hook: v })} />
               {s.slides.map((slide, i) => (
                 <TextRow
                   key={i}
-                  label={`Slide ${i + 1}`}
+                  label={s.template === "meme" ? "Punchline" : `Slide ${i + 1}`}
                   value={slide.text}
                   editing={!!editing}
                   onChange={(v) => editing && setEditing({ ...editing, slides: editing.slides.map((x, j) => (j === i ? { ...x, text: v } : x)) })}
@@ -240,6 +252,66 @@ function TextRow({ label, value, editing, onChange }: { label: string; value: st
     <div className="grid grid-cols-[80px_1fr] items-center gap-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-ink/40">{label}</span>
       {editing ? <input className="input py-1.5" value={value} onChange={(e) => onChange(e.target.value)} /> : <p className="text-sm font-medium">{value}</p>}
+    </div>
+  );
+}
+
+/** "Choose the moment" for every video clip in the Reel, plus the clip-sound switch. */
+function ClipsCard({
+  script,
+  media,
+  saving,
+  dirty,
+  onPreview,
+  onSave,
+}: {
+  script: ReelScript;
+  media: MediaItem[];
+  saving: boolean;
+  dirty: boolean;
+  onPreview: (slides: ReelScript["slides"], sound: boolean) => void;
+  onSave: () => void;
+}) {
+  const meme = script.template === "meme";
+  const clips = script.slides
+    .map((slide, i) => ({ slide, i, m: media.find((x) => x.id === slide.mediaId) }))
+    .filter((c) => c.m?.kind === "video");
+  if (!clips.length) return null;
+  const sound = meme ? script.sound !== false : !!script.sound;
+  return (
+    <div className="card p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold">{meme ? "The moment" : "Clips"}</h2>
+        {dirty && (
+          <button className="text-sm font-bold text-coral" onClick={onSave} disabled={saving}>
+            Save
+          </button>
+        )}
+      </div>
+      <div className="mt-3 space-y-5">
+        {clips.map(({ slide, i, m }) => (
+          <div key={i}>
+            {!meme && <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/40">Slide {i + 1}</p>}
+            <ClipTrimmer
+              src={mediaUrl(m!.id)}
+              duration={m!.duration}
+              start={slide.clipStart ?? 0}
+              end={slide.clipEnd}
+              withEnd={meme}
+              onChange={(r) =>
+                onPreview(
+                  script.slides.map((x, j) => (j === i ? { ...x, clipStart: r.start, ...(meme ? { clipEnd: r.end } : {}) } : x)),
+                  sound,
+                )
+              }
+            />
+          </div>
+        ))}
+      </div>
+      <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
+        <input type="checkbox" className="accent-coral" checked={sound} onChange={(e) => onPreview(script.slides, e.target.checked)} />
+        Keep the clips&apos; own sound
+      </label>
     </div>
   );
 }

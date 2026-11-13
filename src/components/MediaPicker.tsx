@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { mediaUrl } from "@/lib/props";
 import GoogleDriveButton from "./GoogleDriveButton";
+import StockClipSearch from "./StockClipSearch";
 import type { MediaItem, TemplateId } from "@/lib/types";
 
 /** Upload photos/clips and pick them in order. */
@@ -22,6 +23,11 @@ export default function MediaPicker({
 }) {
   const [library, setLibrary] = useState<MediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const single = template === "meme";
+  const add = (items: MediaItem[]) => {
+    setLibrary((lib) => [...items, ...lib]);
+    onChange(single ? items.slice(0, 1).map((i) => i.id) : [...selected, ...items.map((i) => i.id)]);
+  };
 
   useEffect(() => {
     api<MediaItem[]>(`/api/brands/${brandId}/media`).then(setLibrary).catch(() => {});
@@ -32,9 +38,7 @@ export default function MediaPicker({
     try {
       const form = new FormData();
       [...files].forEach((f) => form.append("files", f));
-      const items = await api<MediaItem[]>(`/api/brands/${brandId}/media`, { method: "POST", body: form });
-      setLibrary((lib) => [...items, ...lib]);
-      onChange([...selected, ...items.map((i) => i.id)]);
+      add(await api<MediaItem[]>(`/api/brands/${brandId}/media`, { method: "POST", body: form }));
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -43,38 +47,40 @@ export default function MediaPicker({
   }
 
   const drive = (
-    <GoogleDriveButton
-      brandId={brandId}
-      className="btn-ghost text-sm"
-      onError={onError}
-      onImported={(items) => {
-        setLibrary((lib) => [...items, ...lib]);
-        onChange([...selected, ...items.map((i) => i.id)]);
-      }}
-    />
+    <div className="flex flex-wrap justify-end gap-2">
+      <StockClipSearch brandId={brandId} onError={onError} onImported={(item) => add([item])} />
+      <GoogleDriveButton brandId={brandId} className="btn-ghost text-sm" onError={onError} onImported={add} />
+    </div>
   );
 
-  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : single ? [id] : [...selected, id]);
   const input = (
-    <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => e.target.files && upload(e.target.files)} />
+    <input
+      type="file"
+      accept={single ? "video/*,image/*" : "image/*,video/*"}
+      multiple={!single}
+      className="hidden"
+      onChange={(e) => e.target.files && upload(e.target.files)}
+    />
   );
 
   if (library.length === 0) {
     return (
       <div className="grid gap-3">
       <label className="card p-8 grid place-items-center text-center cursor-pointer border-dashed border-2 border-black/10 hover:border-coral/50">
-        <p className="font-semibold">{uploading ? "Uploading…" : "Drop in photos or short clips"}</p>
+        <p className="font-semibold">{uploading ? "Uploading…" : single ? "Drop in a short video clip" : "Drop in photos or short clips"}</p>
         <p className="text-sm text-ink/55 mt-1">Shot on your phone is perfect.{template === "tips" ? " Optional for this format." : ""}</p>
         {input}
       </label>
-      <div className="text-center">{drive}</div>
+      <div className="flex justify-center">{drive}</div>
       </div>
     );
   }
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">{drive}</div>
+      <div className="mb-3">{drive}</div>
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
         <label className="aspect-[3/4] rounded-xl border-2 border-dashed border-black/10 grid place-items-center text-center text-xs font-semibold text-ink/55 cursor-pointer hover:border-coral/50">
           {uploading ? "Uploading…" : "+ Upload"}
@@ -97,10 +103,14 @@ export default function MediaPicker({
               )}
               {n >= 0 && (
                 <span className="absolute top-1.5 left-1.5 h-6 min-w-6 px-1.5 rounded-full bg-coral text-white text-xs font-black grid place-items-center">
-                  {template === "beforeAfter" && n < 2 ? (n === 0 ? "BEFORE" : "AFTER") : n + 1}
+                  {template === "beforeAfter" && n < 2 ? (n === 0 ? "BEFORE" : "AFTER") : single ? "✓" : n + 1}
                 </span>
               )}
-              {m.kind === "video" && <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 text-[10px] text-white">VIDEO</span>}
+              {m.kind === "video" && (
+                <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 text-[10px] text-white">
+                  {m.duration ? `${Math.round(m.duration)}s` : "VIDEO"}
+                </span>
+              )}
             </button>
           );
         })}

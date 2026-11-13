@@ -26,6 +26,17 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
     }
   }
 
+  if (body.script?.slides) {
+    const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v >= 0 && v < 3600 ? Math.round(v * 10) / 10 : undefined);
+    body.script.slides = body.script.slides.slice(0, 8).map((x) => ({
+      text: String(x.text ?? "").slice(0, 200),
+      mediaId: typeof x.mediaId === "string" ? x.mediaId : undefined,
+      clipStart: n(x.clipStart),
+      clipEnd: n(x.clipEnd),
+    }));
+  }
+  if (body.script && "sound" in body.script) body.script.sound = !!body.script.sound;
+
   const next: Reel = { ...reel, updatedAt: new Date().toISOString() };
   if (body.status === "approved" || body.status === "draft") next.status = body.status;
   if (body.script) {
