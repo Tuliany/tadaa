@@ -1,7 +1,7 @@
 "use client";
 
 import { Player, Thumbnail } from "@remotion/player";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Reel } from "@/remotion/Reel";
 import { mediaUrl } from "@/lib/props";
 import { STYLE_IDS, STYLES, type StyleId } from "@/lib/styles";
@@ -51,6 +51,12 @@ export default function StylePicker({
       media: pics.map((m) => ({ id: m.id, kind: m.kind, url: mediaUrl(m.id) })),
     };
   }, [brand, template, media]);
+
+  // Bring the picked style into view (it may sit off-screen to the right).
+  useEffect(() => {
+    const el = row.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (el && row.current) row.current.scrollTo({ left: el.offsetLeft - row.current.offsetLeft - 8, behavior: "smooth" });
+  }, [value]);
 
   const scroll = (dir: number) => row.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
 
