@@ -106,7 +106,7 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
       return await fn(...args);
     } catch (e) {
       if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
-      if (e instanceof Error && (e.name === "TikTokError" || e.name === "MetaError")) return Response.json({ error: e.message }, { status: 400 });
+      if (e instanceof Error && (e.name === "TikTokError" || e.name === "MetaError" || e.name === "LinkedInError")) return Response.json({ error: e.message }, { status: 400 });
       console.error(e);
       return Response.json({ error: "Something went wrong. Please try again." }, { status: 500 });
     }

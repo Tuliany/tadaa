@@ -2,6 +2,7 @@ import { z } from "zod";
 import { handle, HttpError, requireBrand } from "@/lib/auth";
 import { deleteConnection, getConnection, saveConnection } from "@/lib/db";
 import { instagramConfigured } from "@/lib/instagram";
+import { linkedinConfigured, revoke as revokeLinkedIn } from "@/lib/linkedin";
 import { metaConfigured, revoke as revokeMeta } from "@/lib/meta";
 import { decrypt } from "@/lib/oauth";
 import { revokeToken, tiktokConfigured } from "@/lib/tiktok";
@@ -14,6 +15,7 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[
     getConnection(brand.id, "meta"),
     getConnection(brand.id, "instagram"),
   ]);
+  const li = await getConnection(brand.id, "linkedin");
   const igAcc = ig?.pages?.find((p) => p.id === ig.selectedPageId);
   const page = meta?.pages?.find((p) => p.id === meta.selectedPageId);
   return Response.json({
@@ -41,6 +43,14 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[
       accounts: (ig?.pages ?? []).map((p) => ({ id: p.id, username: p.igUsername, pictureUrl: p.igPictureUrl })),
       selectedId: ig?.selectedPageId,
       account: igAcc ? { id: igAcc.id, username: igAcc.igUsername, pictureUrl: igAcc.igPictureUrl } : null,
+    },
+    linkedin: {
+      available: linkedinConfigured(),
+      connected: !!li,
+      displayName: li?.displayName,
+      avatarUrl: li?.avatarUrl,
+      expired: li ? Date.parse(li.accessExpiresAt) < Date.now() && Date.parse(li.refreshExpiresAt) < Date.now() : false,
+      expiresAt: li?.accessExpiresAt,
     },
   });
 });
@@ -77,6 +87,12 @@ export const DELETE = handle(async (req: Request, ctx: RouteContext<"/api/brands
     if (conn) {
       await revokeMeta(conn);
       await deleteConnection(brand.id, "instagram");
+    }
+  } else if (provider === "linkedin") {
+    const conn = await getConnection(brand.id, "linkedin");
+    if (conn) {
+      await revokeLinkedIn(conn);
+      await deleteConnection(brand.id, "linkedin");
     }
   } else throw new HttpError(400, "Unknown provider");
   return Response.json({ ok: true });

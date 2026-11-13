@@ -104,7 +104,7 @@ export interface Reel {
   updatedAt: string;
 }
 
-export type SocialProvider = "tiktok" | "meta" | "instagram";
+export type SocialProvider = "tiktok" | "meta" | "instagram" | "linkedin";
 
 /** A Facebook Page the user manages, with its linked Instagram professional account (if any). */
 export interface MetaPage {
@@ -140,7 +140,7 @@ export interface SocialConnection {
   updatedAt: string;
 }
 
-export type PublishTarget = "tiktok" | "instagram" | "facebook";
+export type PublishTarget = "tiktok" | "instagram" | "facebook" | "linkedin";
 
 export interface Publication {
   provider: PublishTarget;

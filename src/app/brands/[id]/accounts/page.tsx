@@ -22,13 +22,6 @@ function Logo({ slug, emoji }: { slug: string; emoji: string }) {
 
 const COMING_SOON = [
   {
-    name: "LinkedIn",
-    slug: "linkedin",
-    icon: "💼",
-    what: "Publish approved videos to your profile or company page.",
-    needs: "Admin access to the company page.",
-  },
-  {
     name: "Google Drive",
     slug: "google-drive",
     icon: "🗂️",
@@ -197,6 +190,84 @@ function TikTokCard() {
       ) : (
         <a className="btn-dark mt-4 self-start" href={`/api/connect/tiktok/start?brandId=${id}`}>
           Connect TikTok
+        </a>
+      )}
+    </div>
+  );
+}
+
+interface LiState {
+  available: boolean;
+  connected: boolean;
+  displayName?: string;
+  avatarUrl?: string;
+  expired: boolean;
+  expiresAt?: string;
+}
+
+function LinkedInCard() {
+  const { id } = useParams<{ id: string }>();
+  const params = useSearchParams();
+  const [li, setLi] = useState<LiState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const result = params.get("linkedin");
+  const message = params.get("message");
+
+  const load = () =>
+    api<{ linkedin: LiState }>(`/api/brands/${id}/connections`)
+      .then((r) => setLi(r.linkedin))
+      .catch(() => {});
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function disconnect() {
+    if (!confirm("Disconnect LinkedIn? Tadaa will no longer be able to post to this profile.")) return;
+    setBusy(true);
+    await api(`/api/brands/${id}/connections?provider=linkedin`, { method: "DELETE" }).catch(() => {});
+    await load();
+    setBusy(false);
+  }
+
+  const connectUrl = `/api/connect/linkedin/start?brandId=${id}`;
+
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-center gap-3">
+        <Logo slug="linkedin" emoji="💼" />
+        <div className="min-w-0">
+          <p className="font-bold text-lg">LinkedIn</p>
+          <p className={`text-xs font-semibold truncate ${li?.connected && !li.expired ? "text-green-600" : "text-ink/40"}`}>
+            {li?.connected ? (li.expired ? "Connection expired – reconnect" : `Connected · ${li.displayName}`) : "Not connected"}
+          </p>
+        </div>
+        {li?.connected && li.avatarUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={li.avatarUrl} alt="" className="ml-auto h-9 w-9 rounded-full" />
+        )}
+      </div>
+      <p className="mt-3 text-sm text-ink/70">Post approved Reels to your LinkedIn profile. Company pages are coming soon.</p>
+      <p className="mt-1 text-xs text-ink/45">Needs: a LinkedIn account. LinkedIn asks you to reconnect every 60 days.</p>
+      {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">LinkedIn connected ✓</p>}
+      {result === "partial" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</p>}
+      {result === "error" && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t connect LinkedIn: {message}</p>}
+      {li && !li.available ? (
+        <button className="btn-ghost mt-4 self-start" disabled title="Coming soon">
+          Connect · coming soon
+        </button>
+      ) : li?.connected ? (
+        <div className="mt-4 flex gap-2">
+          <a className={li.expired ? "btn-dark" : "btn-ghost"} href={connectUrl}>
+            Reconnect
+          </a>
+          <button className="btn-ghost" onClick={disconnect} disabled={busy}>
+            {busy ? "…" : "Disconnect"}
+          </button>
+        </div>
+      ) : (
+        <a className="btn-dark mt-4 self-start" href={connectUrl}>
+          Connect LinkedIn
         </a>
       )}
     </div>
@@ -434,6 +505,9 @@ export default function Accounts() {
         </Suspense>
         <Suspense>
           <TikTokCard />
+        </Suspense>
+        <Suspense>
+          <LinkedInCard />
         </Suspense>
         {COMING_SOON.map((c) => (
           <div key={c.name} className="card p-5 flex flex-col">

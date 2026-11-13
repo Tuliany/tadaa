@@ -103,6 +103,13 @@ export default function Privacy() {
         remove Tadaa in your Facebook settings under Business Integrations; to ask us to delete any remaining data, email hello@tadaaai.com.
       </p>
 
+      <h3>Connected social accounts (LinkedIn)</h3>
+      <p>
+        If you connect LinkedIn, we receive your LinkedIn member id, name and profile picture and an access token (stored encrypted). We use them
+        only to show which profile is connected and to publish the videos you choose to post, with the text you write each time. We do not read
+        your connections, messages or other posts. You can disconnect at any time under Accounts, which revokes our access and deletes the token.
+      </p>
+
       <h2>7. How long we keep data</h2>
       <ul>
         <li>Account, brand data, uploads and Reels: for as long as your account exists. When you delete your account, they are deleted within 30 days.</li>

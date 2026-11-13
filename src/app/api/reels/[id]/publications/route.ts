@@ -1,5 +1,6 @@
 import { handle, requireReel } from "@/lib/auth";
 import { getConnection, getReel, saveReel } from "@/lib/db";
+import { accessToken as liToken, videoStatus } from "@/lib/linkedin";
 import { advanceInstagramReel, facebookReelStatus } from "@/lib/meta";
 import { accessToken, publishStatus } from "@/lib/tiktok";
 import type { Publication } from "@/lib/types";
@@ -10,10 +11,11 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[i
   const pending = (reel.publications ?? []).filter((p) => p.status === "processing");
   if (!pending.length) return Response.json(reel);
 
-  const [tt, meta, ig] = await Promise.all([
+  const [tt, meta, ig, li] = await Promise.all([
     getConnection(brand.id, "tiktok"),
     getConnection(brand.id, "meta"),
     getConnection(brand.id, "instagram"),
+    getConnection(brand.id, "linkedin"),
   ]);
   const page = meta?.pages?.find((p) => p.id === meta.selectedPageId);
   // Instagram posts are checked with the connection that started them.
@@ -33,6 +35,10 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[i
       } else if (p.provider === "instagram" && igFor(p.via)) {
         const r = await advanceInstagramReel(igFor(p.via)!, p.publishId);
         if (r.state === "published") updates.set(p.publishId, { status: "published", postId: r.postId, permalink: r.permalink });
+        else if (r.state === "failed") updates.set(p.publishId, { status: "failed", error: r.error });
+      } else if (p.provider === "linkedin" && li) {
+        const r = await videoStatus(await liToken(li), p.publishId);
+        if (r.state === "published") updates.set(p.publishId, { status: "published" });
         else if (r.state === "failed") updates.set(p.publishId, { status: "failed", error: r.error });
       } else if (p.provider === "facebook" && page) {
         const r = await facebookReelStatus(page, p.publishId);
