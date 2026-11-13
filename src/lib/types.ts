@@ -56,6 +56,23 @@ export interface Brand {
   referenceReels: string[];
   /** The look last chosen for this brand's Reels (pre-selected next time). */
   defaultStyle?: import("./styles").StyleId;
+  /** Looks learned from reference videos the owner uploaded (newest first). */
+  references?: ReferenceStyle[];
+  /** Last chosen reference look, pre-selected next time instead of defaultStyle. */
+  defaultReferenceId?: string;
+  createdAt: string;
+}
+
+/** A look learned from an uploaded reference video (the video itself is not kept). */
+export interface ReferenceStyle {
+  id: string;
+  name: string;
+  /** One user-facing sentence, e.g. "Fast cuts (1.2 s), bold centred captions, warm colours". */
+  summary: string;
+  base: import("./styles").StyleId;
+  overrides: import("./styles").StyleOverrides;
+  avgShotSeconds: number | null;
+  sourceUrl?: string;
   createdAt: string;
 }
 
@@ -79,6 +96,10 @@ export interface ReelScript {
   template: TemplateId;
   /** Visual look (see src/lib/styles.ts); Bold Pop when missing. */
   style?: import("./styles").StyleId;
+  /** Tweaks copied from an uploaded reference video (set by the server only). */
+  styleOverrides?: import("./styles").StyleOverrides;
+  /** The brand reference those tweaks came from. */
+  referenceId?: string;
   hook: string;
   slides: Slide[];
   cta: string;

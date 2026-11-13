@@ -174,6 +174,37 @@ export const STYLES: Record<StyleId, StyleSpec> = {
 
 export const STYLE_IDS = Object.keys(STYLES) as StyleId[];
 
+/** The parts of a look a reference video may change. */
+export type StyleOverrides = Partial<
+  Pick<StyleSpec, "font" | "weight" | "upper" | "size" | "placement" | "treatment" | "pace" | "transition" | "motion" | "shade" | "grade" | "letterbox" | "wordByWord">
+>;
+
+const FONT_KEYS = ["inter", "playfair", "bebas", "nunito", "montserrat", "dmSerif"] as const;
+
+/** Keep only known keys with sane values (overrides are stored and rendered, so never trust them blindly). */
+export function cleanOverrides(o: unknown): StyleOverrides {
+  if (!o || typeof o !== "object") return {};
+  const x = o as Record<string, unknown>;
+  const out: StyleOverrides = {};
+  const num = (v: unknown, lo: number, hi: number) => (typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined);
+  const pick = <T extends string>(v: unknown, allowed: readonly T[]) => (allowed.includes(v as T) ? (v as T) : undefined);
+  out.font = pick(x.font, FONT_KEYS);
+  out.weight = num(x.weight, 300, 900);
+  out.upper = typeof x.upper === "boolean" ? x.upper : undefined;
+  out.size = num(x.size, 0.7, 1.5);
+  out.placement = pick(x.placement, ["center", "bottom", "top", "lowerThird"] as const);
+  out.treatment = pick(x.treatment, ["shadow", "pill", "box", "outline", "bar", "tilt"] as const);
+  out.pace = num(x.pace, 0.45, 1.6);
+  out.transition = pick(x.transition, ["pop", "cut", "fade", "slide", "zoom"] as const);
+  out.motion = num(x.motion, 0, 0.2);
+  out.shade = num(x.shade, 0, 0.8);
+  out.grade = typeof x.grade === "string" && /^[a-z0-9().,\s-]{0,120}$/i.test(x.grade) ? x.grade : undefined;
+  out.letterbox = typeof x.letterbox === "boolean" ? x.letterbox : undefined;
+  out.wordByWord = typeof x.wordByWord === "boolean" ? x.wordByWord : undefined;
+  for (const k of Object.keys(out) as (keyof StyleOverrides)[]) if (out[k] === undefined) delete out[k];
+  return out;
+}
+
 export function isStyleId(x: unknown): x is StyleId {
   return typeof x === "string" && x in STYLES;
 }
@@ -194,6 +225,7 @@ export function pickStyle(brand: Pick<Brand, "industry" | "description" | "offer
   return best;
 }
 
-export function styleOf(script: Pick<ReelScript, "style">): StyleSpec {
-  return STYLES[script.style && isStyleId(script.style) ? script.style : "bold"];
+export function styleOf(script: Pick<ReelScript, "style" | "styleOverrides">): StyleSpec {
+  const base = STYLES[script.style && isStyleId(script.style) ? script.style : "bold"];
+  return script.styleOverrides ? { ...base, ...cleanOverrides(script.styleOverrides) } : base;
 }

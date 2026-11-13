@@ -4,7 +4,8 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
 import StylePicker from "@/components/StylePicker";
-import { pickStyle, type StyleId } from "@/lib/styles";
+import { pickStyle } from "@/lib/styles";
+import { initialLook, lookPayload, type LookValue } from "@/lib/looks";
 import { api } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, TemplateId } from "@/lib/types";
@@ -20,13 +21,13 @@ function NewReel() {
   const [error, setError] = useState("");
   const [brand, setBrand] = useState<Brand | null>(null);
   const [library, setLibrary] = useState<MediaItem[]>([]);
-  const [style, setStyle] = useState<StyleId | null>(null);
+  const [style, setStyle] = useState<LookValue | null>(null);
 
   useEffect(() => {
     api<Brand>(`/api/brands/${id}`)
       .then((b) => {
         setBrand(b);
-        setStyle((s) => s ?? pickStyle(b));
+        setStyle((s) => s ?? initialLook(b));
       })
       .catch(() => {});
   }, [id]);
@@ -49,7 +50,7 @@ function NewReel() {
     setBusy(true);
     setError("");
     try {
-      const reel = await api<Reel>(`/api/brands/${id}/reels`, { method: "POST", json: { topic, template, mediaIds: selected, style } });
+      const reel = await api<Reel>(`/api/brands/${id}/reels`, { method: "POST", json: { topic, template, mediaIds: selected, ...(style ? lookPayload(style) : {}) } });
       router.push(`/reels/${reel.id}`);
     } catch (e) {
       setError((e as Error).message);
@@ -98,7 +99,7 @@ function NewReel() {
       {brand && style && (
         <section className="mt-8">
           <h2 className="label">4 · Pick how it should look</h2>
-          <StylePicker brand={brand} template={template} media={previewMedia} value={style} recommended={recommended} onChange={setStyle} />
+          <StylePicker brand={brand} brandId={id} template={template} media={previewMedia} value={style} recommended={recommended} onChange={setStyle} />
         </section>
       )}
 

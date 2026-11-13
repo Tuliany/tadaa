@@ -17,7 +17,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
   const { brand } = await requireBrand((await ctx.params).id);
   const id = brand.id;
 
-  const body = (await req.json()) as { topic?: string; template?: TemplateId; mediaIds?: string[]; style?: string };
+  const body = (await req.json()) as { topic?: string; template?: TemplateId; mediaIds?: string[]; style?: string; referenceId?: string };
   const topic = body.topic?.trim();
   if (!topic) throw new HttpError(400, "Tell us what this Reel is about.");
   const template: TemplateId = body.template && body.template in TEMPLATES ? body.template : "showcase";
@@ -29,10 +29,19 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
   }
 
   try {
-    const style = isStyleId(body.style) ? body.style : pickStyle(brand);
-    const script = { ...(await writeReelScript(brand, topic, template, media)), style };
+    // A look learned from a reference video, else a built-in look (else the brand's best match).
+    const ref = body.referenceId ? brand.references?.find((r) => r.id === body.referenceId) : undefined;
+    const style = ref ? ref.base : isStyleId(body.style) ? body.style : pickStyle(brand);
+    const script = {
+      ...(await writeReelScript(brand, topic, template, media)),
+      style,
+      ...(ref ? { styleOverrides: ref.overrides, referenceId: ref.id } : {}),
+    };
     // Remember the look so the next Reel starts with it.
-    if (isStyleId(body.style) && brand.defaultStyle !== body.style) await saveBrand({ ...brand, defaultStyle: body.style });
+    if (ref && brand.defaultReferenceId !== ref.id) await saveBrand({ ...brand, defaultReferenceId: ref.id });
+    else if (!ref && isStyleId(body.style) && (brand.defaultStyle !== body.style || brand.defaultReferenceId)) {
+      await saveBrand({ ...brand, defaultStyle: body.style, defaultReferenceId: undefined });
+    }
     const now = new Date().toISOString();
     const reel: Reel = {
       id: nanoid(10),

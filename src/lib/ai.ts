@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SiteInfo } from "./scrape";
 import { LANGUAGES, type Brand, type Language, type MediaItem, type PlanIdea, type ReelScript, type TemplateId } from "./types";
 import { TEMPLATES } from "./templates";
+import { cleanOverrides, STYLE_IDS, STYLES, type StyleId, type StyleOverrides } from "./styles";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 
@@ -333,4 +334,115 @@ Schema: { "ideas": [{ "title": string, "template": "showcase"|"beforeAfter"|"tip
     planSchema,
   );
   return res.ideas;
+}
+
+// ---------- Reference videos ----------
+
+const referenceSchema = z.object({
+  name: z.string(),
+  summary: z.string(),
+  closestStyle: z.string(),
+  font: z.enum(["sans", "condensed", "serif", "rounded", "display-serif", "geometric"]),
+  uppercase: z.boolean(),
+  textSize: z.enum(["small", "medium", "large"]),
+  placement: z.enum(["center", "bottom", "top", "lowerThird"]),
+  treatment: z.enum(["shadow", "pill", "box", "outline", "bar", "tilt"]),
+  transition: z.enum(["cut", "fade", "slide", "zoom", "pop"]),
+  colorGrade: z.enum(["neutral", "warm", "cool", "high-contrast", "muted", "black-and-white"]),
+  letterbox: z.boolean(),
+  wordByWord: z.boolean(),
+  motion: z.enum(["still", "gentle", "strong"]),
+});
+
+const FONT_MAP = {
+  sans: { font: "inter", weight: 800 },
+  condensed: { font: "bebas", weight: 400 },
+  serif: { font: "playfair", weight: 600 },
+  rounded: { font: "nunito", weight: 900 },
+  "display-serif": { font: "dmSerif", weight: 400 },
+  geometric: { font: "montserrat", weight: 800 },
+} as const;
+
+const GRADES: Record<string, string | undefined> = {
+  neutral: "none",
+  warm: "saturate(1.1) sepia(0.12) brightness(1.03)",
+  cool: "saturate(0.95) hue-rotate(-8deg) brightness(1.02)",
+  "high-contrast": "contrast(1.18) saturate(1.15)",
+  muted: "saturate(0.75) contrast(0.98)",
+  "black-and-white": "grayscale(1) contrast(1.1)",
+};
+
+/** Reads frames of a reference video and returns the closest look plus tweaks to match its edit. */
+export async function describeReference(
+  frames: Buffer[],
+  facts: { duration: number; avgShotSeconds: number | null; cuts: number },
+  language: Language,
+): Promise<{ name: string; summary: string; base: StyleId; overrides: StyleOverrides }> {
+  const pace = facts.avgShotSeconds ? Math.min(1.6, Math.max(0.45, facts.avgShotSeconds / 2.6)) : 1;
+  if (!aiEnabled()) {
+    return { name: "My reference", summary: "Pacing copied from your video.", base: "bold", overrides: cleanOverrides({ pace }) };
+  }
+  const styleList = STYLE_IDS.map((id) => `${id}: ${STYLES[id].name} – ${STYLES[id].tagline}`).join("\n");
+  const prompt = `These are ${frames.length} frames, in order, from a short vertical video (${facts.duration.toFixed(1)} s, ${facts.cuts} cuts${
+    facts.avgShotSeconds ? `, about ${facts.avgShotSeconds} s per shot` : ", one continuous shot"
+  }). Describe its EDITING STYLE (not its subject) so we can recreate the look for a different business with their own photos.
+
+Our looks:
+${styleList}
+
+Return JSON:
+{
+  "name": string (2-3 words naming the look, e.g. "Snappy captions"),
+  "summary": string (one short sentence for the user in ${LANGUAGES[language]}, e.g. "Fast cuts, bold white captions in the middle, warm colours"),
+  "closestStyle": one of ${STYLE_IDS.map((s) => `"${s}"`).join(", ")},
+  "font": "sans" | "condensed" | "serif" | "rounded" | "display-serif" | "geometric" (the on-screen text font; "sans" if there is no text),
+  "uppercase": boolean,
+  "textSize": "small" | "medium" | "large",
+  "placement": "center" | "bottom" | "top" | "lowerThird",
+  "treatment": "shadow" (plain text on the image) | "pill" (rounded colour background) | "box" (solid black/white box) | "outline" (subtitle-style outlined captions) | "bar" (card with a coloured edge) | "tilt" (rotated sticker),
+  "transition": "cut" | "fade" | "slide" | "zoom" | "pop",
+  "colorGrade": "neutral" | "warm" | "cool" | "high-contrast" | "muted" | "black-and-white",
+  "letterbox": boolean (black bars top and bottom),
+  "wordByWord": boolean (captions appear a few words at a time, like auto-subtitles),
+  "motion": "still" | "gentle" | "strong" (camera movement / zoom)
+}`;
+  const res = await getClient().messages.create({
+    model: MODEL,
+    max_tokens: 800,
+    system: "You are a video editor who reverse-engineers the editing style of short social videos. Respond with a single JSON object only.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          ...frames.map((f) => ({ type: "image" as const, source: { type: "base64" as const, media_type: "image/jpeg" as const, data: f.toString("base64") } })),
+          { type: "text" as const, text: prompt },
+        ],
+      },
+    ],
+  });
+  const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+  const parsed = referenceSchema.safeParse(JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)));
+  if (!parsed.success) throw new Error("We couldn't read the style of that video. Try another one.");
+  const r = parsed.data;
+  const base: StyleId = (STYLE_IDS as string[]).includes(r.closestStyle) ? (r.closestStyle as StyleId) : "bold";
+  const font = FONT_MAP[r.font];
+  return {
+    name: r.name.slice(0, 40),
+    summary: r.summary.slice(0, 160),
+    base,
+    overrides: cleanOverrides({
+      font: font.font,
+      weight: font.weight,
+      upper: r.uppercase,
+      size: { small: 0.85, medium: 1, large: 1.3 }[r.textSize],
+      placement: r.placement,
+      treatment: r.treatment,
+      transition: r.transition,
+      grade: GRADES[r.colorGrade],
+      letterbox: r.letterbox,
+      wordByWord: r.wordByWord && r.treatment === "outline",
+      motion: { still: 0.02, gentle: 0.08, strong: 0.16 }[r.motion],
+      pace,
+    }),
+  };
 }

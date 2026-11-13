@@ -38,7 +38,7 @@ export const TEMPLATES: Record<
 };
 
 /** Frame lengths for a Reel, adjusted for its look's pace (Quick Cuts is faster, Calm Luxury slower). */
-export function timing(script: Pick<ReelScript, "style">) {
+export function timing(script: Pick<ReelScript, "style" | "styleOverrides">) {
   const pace = styleOf(script).pace;
   return {
     hook: Math.round(HOOK_FRAMES * Math.min(pace, 1.15)),
@@ -47,7 +47,7 @@ export function timing(script: Pick<ReelScript, "style">) {
   };
 }
 
-export function reelDuration(script: Pick<ReelScript, "slides" | "style">) {
+export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styleOverrides">) {
   const t = timing(script);
   return t.hook + script.slides.length * t.slide + t.cta;
 }

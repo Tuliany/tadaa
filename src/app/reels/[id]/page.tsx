@@ -11,7 +11,8 @@ import { api } from "@/lib/client";
 import { toRenderProps } from "@/lib/props";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, ReelScript } from "@/lib/types";
-import { pickStyle, type StyleId } from "@/lib/styles";
+import { pickStyle } from "@/lib/styles";
+import { lookPayload, type LookValue } from "@/lib/looks";
 
 const ReelPlayer = dynamic(() => import("@/components/ReelPlayer"), {
   ssr: false,
@@ -178,10 +179,11 @@ export default function ReelPage() {
                 brand={brand}
                 template={reel.script.template}
                 media={reel.mediaIds.map((mid) => media.find((m) => m.id === mid)).filter((m): m is MediaItem => !!m)}
-                value={reel.script.style ?? "bold"}
+                brandId={brand.id}
+                value={reel.script.referenceId ? (`ref:${reel.script.referenceId}` as LookValue) : (reel.script.style ?? "bold")}
                 recommended={pickStyle(brand)}
-                onChange={(style: StyleId) =>
-                  run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: { style } } })))
+                onChange={(look: LookValue) =>
+                  run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: lookPayload(look) } })))
                 }
               />
             </div>

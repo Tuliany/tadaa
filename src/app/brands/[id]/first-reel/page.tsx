@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
 import StylePicker from "@/components/StylePicker";
-import { pickStyle, type StyleId } from "@/lib/styles";
+import { pickStyle } from "@/lib/styles";
+import { initialLook, lookPayload, type LookValue } from "@/lib/looks";
 import { api, apiStream } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Plan, PlanIdea, Reel } from "@/lib/types";
@@ -39,7 +40,7 @@ export default function FirstReel() {
   const [picked, setPicked] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
   const [mediaIds, setMediaIds] = useState<string[]>([]);
-  const [style, setStyle] = useState<StyleId | null>(null);
+  const [style, setStyle] = useState<LookValue | null>(null);
   const [library, setLibrary] = useState<MediaItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState(false);
@@ -49,7 +50,7 @@ export default function FirstReel() {
     api<Brand>(`/api/brands/${id}`)
       .then((b) => {
         setBrand(b);
-        setStyle((cur) => cur ?? pickStyle(b));
+        setStyle((cur) => cur ?? initialLook(b));
       }).catch((e) => setError(e.message));
     (async () => {
       try {
@@ -97,7 +98,7 @@ export default function FirstReel() {
     try {
       const reel = await api<Reel>(`/api/brands/${id}/reels`, {
         method: "POST",
-        json: { topic: `${idea.title}: ${idea.hook}`, template: idea.template, mediaIds, style },
+        json: { topic: `${idea.title}: ${idea.hook}`, template: idea.template, mediaIds, ...(style ? lookPayload(style) : {}) },
       });
       router.push(`/reels/${reel.id}`);
     } catch (e) {
@@ -195,6 +196,7 @@ export default function FirstReel() {
         <Step n={4} title="Pick how it should look" sub="Live previews with your colours and photos. You can change it later.">
           <StylePicker
             brand={brand}
+            brandId={id}
             template={idea?.template ?? "showcase"}
             media={previewMedia}
             value={style}
