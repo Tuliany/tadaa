@@ -20,16 +20,6 @@ function Logo({ slug, emoji }: { slug: string; emoji: string }) {
   );
 }
 
-const COMING_SOON = [
-  {
-    name: "Google Drive",
-    slug: "google-drive",
-    icon: "🗂️",
-    what: "Pick a folder of photos and clips – they appear in your Tadaa library automatically.",
-    needs: "A Google account with your brand's media.",
-  },
-];
-
 interface Connections {
   connectorUrl: string;
   apps: { clientId: string; name: string; createdAt: string }[];
@@ -191,6 +181,37 @@ function TikTokCard() {
         <a className="btn-dark mt-4 self-start" href={`/api/connect/tiktok/start?brandId=${id}`}>
           Connect TikTok
         </a>
+      )}
+    </div>
+  );
+}
+
+function GoogleDriveCard() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    api<{ available: boolean }>("/api/google/config")
+      .then((r) => setAvailable(r.available))
+      .catch(() => setAvailable(false));
+  }, []);
+  return (
+    <div className="card p-5 flex flex-col">
+      <div className="flex items-center gap-3">
+        <Logo slug="google-drive" emoji="🗂️" />
+        <div>
+          <p className="font-bold text-lg">Google Drive</p>
+          <p className={`text-xs font-semibold ${available ? "text-green-600" : "text-ink/40"}`}>{available ? "Ready – no setup needed" : "Not connected"}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-ink/70">
+        Bring photos and clips straight from Google Drive into your Tadaa library. Tadaa only sees the files you pick.
+      </p>
+      <p className="mt-1 text-xs text-ink/45">
+        {available ? "Use “Import from Google Drive” when you choose photos for a Reel." : "Needs: a Google account with your brand's media."}
+      </p>
+      {available === false && (
+        <button className="btn-ghost mt-4 self-start" disabled title="Coming soon">
+          Connect · coming soon
+        </button>
       )}
     </div>
   );
@@ -509,22 +530,7 @@ export default function Accounts() {
         <Suspense>
           <LinkedInCard />
         </Suspense>
-        {COMING_SOON.map((c) => (
-          <div key={c.name} className="card p-5 flex flex-col">
-            <div className="flex items-center gap-3">
-              <Logo slug={c.slug} emoji={c.icon} />
-              <div>
-                <p className="font-bold text-lg">{c.name}</p>
-                <p className="text-xs font-semibold text-ink/40">Not connected</p>
-              </div>
-            </div>
-            <p className="mt-3 text-sm text-ink/70">{c.what}</p>
-            <p className="mt-1 text-xs text-ink/45">Needs: {c.needs}</p>
-            <button className="btn-ghost mt-4 self-start" disabled title="Coming soon">
-              Connect · coming soon
-            </button>
-          </div>
-        ))}
+        <GoogleDriveCard />
       </div>
     </div>
   );

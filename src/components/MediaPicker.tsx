@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { mediaUrl } from "@/lib/props";
+import GoogleDriveButton from "./GoogleDriveButton";
 import type { MediaItem, TemplateId } from "@/lib/types";
 
 /** Upload photos/clips and pick them in order. */
@@ -41,6 +42,18 @@ export default function MediaPicker({
     }
   }
 
+  const drive = (
+    <GoogleDriveButton
+      brandId={brandId}
+      className="btn-ghost text-sm"
+      onError={onError}
+      onImported={(items) => {
+        setLibrary((lib) => [...items, ...lib]);
+        onChange([...selected, ...items.map((i) => i.id)]);
+      }}
+    />
+  );
+
   const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
   const input = (
     <input type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => e.target.files && upload(e.target.files)} />
@@ -48,16 +61,20 @@ export default function MediaPicker({
 
   if (library.length === 0) {
     return (
+      <div className="grid gap-3">
       <label className="card p-8 grid place-items-center text-center cursor-pointer border-dashed border-2 border-black/10 hover:border-coral/50">
         <p className="font-semibold">{uploading ? "Uploading…" : "Drop in photos or short clips"}</p>
         <p className="text-sm text-ink/55 mt-1">Shot on your phone is perfect.{template === "tips" ? " Optional for this format." : ""}</p>
         {input}
       </label>
+      <div className="text-center">{drive}</div>
+      </div>
     );
   }
 
   return (
     <div>
+      <div className="mb-3 flex justify-end">{drive}</div>
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
         <label className="aspect-[3/4] rounded-xl border-2 border-dashed border-black/10 grid place-items-center text-center text-xs font-semibold text-ink/55 cursor-pointer hover:border-coral/50">
           {uploading ? "Uploading…" : "+ Upload"}

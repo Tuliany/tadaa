@@ -70,7 +70,7 @@ export default function Privacy() {
 
       <h2>6. Google user data</h2>
       <p>
-        If you connect Google Drive, Tadaai only accesses the files you select yourself. {LEGAL.product}&apos;s use and transfer of information
+        If you import from Google Drive, Tadaai only accesses the files you select yourself in Google&apos;s file picker. We copy those files into your library and use Google&apos;s short-lived access token only for that import – we do not store it. {LEGAL.product}&apos;s use and transfer of information
         received from Google APIs adheres to the{" "}
         <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">
           Google API Services User Data Policy
