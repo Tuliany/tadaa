@@ -3,6 +3,9 @@ import Link from "next/link";
 import LegalPage from "@/components/LegalPage";
 import { LEGAL } from "@/lib/legal";
 
+// Company details come from Railway variables at runtime, so render on each request.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = { title: "Delete your data – Tadaai" };
 
 export default function DataDeletion() {
