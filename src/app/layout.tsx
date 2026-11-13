@@ -6,6 +6,8 @@ import HeaderNav from "@/components/HeaderNav";
 export const metadata: Metadata = {
   title: "Tadaa – on-brand Reels for any business",
   description: "Upload a photo, get a finished on-brand Reel. Approve it and post.",
+  // Meta Business domain verification for tadaaai.com.
+  other: { "facebook-domain-verification": "y5yo040fp2z6j66b991iefy8669t8b" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
