@@ -9,18 +9,32 @@ import { RENDER_DIR, renderPath } from "./storage";
 import type { Brand, Reel } from "./types";
 
 /** In-flight renders, shared by the web app and the Claude connector. */
-const g = globalThis as unknown as { __tadaaRenders?: Map<string, Promise<string>>; __tadaaRenderErrors?: Map<string, string> };
+const g = globalThis as unknown as {
+  __tadaaRenders?: Map<string, Promise<string>>;
+  __tadaaRenderErrors?: Map<string, string>;
+  __tadaaRenderProgress?: Map<string, number>;
+};
 const running = (g.__tadaaRenders ??= new Map());
 const failures = (g.__tadaaRenderErrors ??= new Map());
+const progress = (g.__tadaaRenderProgress ??= new Map());
 
-function runRender(propsFile: string, outFile: string) {
+/** 0–100 while a render is running (the browser loading counts as the first few percent). */
+export function renderProgress(reelId: string) {
+  return progress.get(reelId) ?? 0;
+}
+
+function runRender(propsFile: string, outFile: string, onProgress?: (pct: number) => void) {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(process.cwd(), "scripts/render.mjs"), propsFile, outFile], {
       cwd: process.cwd(),
       env: process.env,
     });
     let log = "";
-    child.stdout.on("data", (d) => (log += d));
+    child.stdout.on("data", (d) => {
+      log += d;
+      const all = [...String(d).matchAll(/progress (\d+)%/g)];
+      if (all.length) onProgress?.(Number(all[all.length - 1][1]));
+    });
     child.stderr.on("data", (d) => (log += d));
     child.on("close", (code) => {
       if (code === 0) return resolve();
@@ -73,7 +87,8 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
     await fs.writeFile(propsFile, JSON.stringify(props));
     const fileName = `${id}-${Date.now()}.mp4`;
     try {
-      await runRender(propsFile, renderPath(fileName));
+      progress.set(id, 0);
+      await runRender(propsFile, renderPath(fileName), (pct) => progress.set(id, pct));
     } finally {
       fs.unlink(propsFile).catch(() => {});
     }
@@ -83,7 +98,10 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
   })();
   job
     .catch((e: Error) => failures.set(id, e.message))
-    .finally(() => running.delete(id));
+    .finally(() => {
+      running.delete(id);
+      progress.delete(id);
+    });
   running.set(id, job);
   return job;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/client";
+import { api, apiStream } from "@/lib/client";
 import { LANGUAGES, type Brand, type Language } from "@/lib/types";
 
 type Scan = {
@@ -40,6 +40,8 @@ export default function Onboarding() {
   const [language, setLanguage] = useState<Language>("en");
   const [scan, setScan] = useState<Scan | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
+  // The brand as it's being written (streamed), shown until the final brand arrives.
+  const [draft, setDraft] = useState<Partial<Brand> | null>(null);
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
   const [tick, setTick] = useState(0);
@@ -58,6 +60,7 @@ export default function Onboarding() {
     setWarning("");
     setScan(null);
     setBrand(null);
+    setDraft(null);
     setStage("reading");
     const referenceReels = reels.split(/\s+/).filter((r) => /^https?:\/\//.test(r));
     try {
@@ -66,10 +69,11 @@ export default function Onboarding() {
           .then(setScan)
           .catch((err) => setWarning(err.message));
       }
-      const res = await api<{ brand: Brand; warning?: string }>("/api/brands", {
-        method: "POST",
-        json: { website, description, referenceReels, language },
-      });
+      const res = await apiStream<{ brand: Brand; warning?: string }, Partial<Brand>>(
+        "/api/brands",
+        { method: "POST", json: { website, description, referenceReels, language } },
+        setDraft,
+      );
       if (res.warning) setWarning(res.warning);
       setBrand(res.brand);
       setStage("done");
@@ -130,7 +134,10 @@ export default function Onboarding() {
   }
 
   const host = (scan?.url || website).replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const colors = brand ? [brand.colors.primary, brand.colors.secondary, brand.colors.background] : scan?.colors ?? [];
+  const kit: Partial<Brand> | null = brand ?? draft;
+  const hex = (c?: string) => (c && /^#[0-9a-f]{6}$/i.test(c) ? c : undefined);
+  const kitColors = [hex(kit?.colors?.primary), hex(kit?.colors?.secondary), hex(kit?.colors?.background)].filter((c): c is string => !!c);
+  const colors = kitColors.length ? kitColors : scan?.colors ?? [];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
@@ -170,12 +177,14 @@ export default function Onboarding() {
         {/* Brand kit */}
         <div className="card p-7 space-y-5">
           <p className="text-sm font-black uppercase tracking-[0.2em] text-coral">Your brand kit</p>
-          <KitRow label="Name" show={!!(brand || scan)}>{brand?.name || scan?.name || <Shimmer w="w-1/2" />}</KitRow>
+          <KitRow label="Name" show={!!(kit?.name || scan)}>{kit?.name || scan?.name || <Shimmer w="w-1/2" />}</KitRow>
           <KitRow label="Headline" show={!!(scan?.headline || brand?.headline)}>
             {scan?.headline || brand?.headline ? `“${scan?.headline || brand?.headline}”` : stage === "reading" ? <Shimmer /> : <span className="text-ink/40">–</span>}
           </KitRow>
-          <KitRow label="What you do" show={!!brand}>{brand ? <span className="text-base font-medium text-ink/80">{brand.description}</span> : <Shimmer w="w-full" />}</KitRow>
-          <KitRow label="Tone of voice" show={!!brand}>{brand?.voice || <Shimmer w="w-1/2" />}</KitRow>
+          <KitRow label="What you do" show={!!kit?.description}>
+            {kit?.description ? <span className="text-base font-medium text-ink/80">{kit.description}</span> : <Shimmer w="w-full" />}
+          </KitRow>
+          <KitRow label="Tone of voice" show={!!kit?.voice}>{kit?.voice || <Shimmer w="w-1/2" />}</KitRow>
           <KitRow label="Colours" show={colors.length > 0}>
             {colors.length ? (
               <div className="flex gap-2">
@@ -187,10 +196,10 @@ export default function Onboarding() {
               <Shimmer w="w-1/3" />
             )}
           </KitRow>
-          {brand && brand.offers.length > 0 && (
+          {(kit?.offers?.filter(Boolean).length ?? 0) > 0 && (
             <KitRow label="What you offer" show>
               <div className="flex flex-wrap gap-2">
-                {brand.offers.slice(0, 6).map((o) => (
+                {kit!.offers!.filter(Boolean).slice(0, 6).map((o) => (
                   <span key={o} className="rounded-full bg-cream px-3 py-1 text-sm font-medium">{o}</span>
                 ))}
               </div>

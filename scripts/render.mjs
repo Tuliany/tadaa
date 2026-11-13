@@ -70,8 +70,9 @@ await renderMedia({
   ffmpegOverride,
   onProgress: ({ progress }) => {
     const pct = Math.floor(progress * 100);
-    if (pct % 10 === 0 && pct !== last) {
+    if (pct !== last) {
       last = pct;
+      // Parsed by src/lib/render.ts to show a progress bar.
       console.log(`progress ${pct}% after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     }
   },

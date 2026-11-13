@@ -3,6 +3,7 @@ import { buildBrandProfile } from "@/lib/ai";
 import { handle, HttpError, requireUser } from "@/lib/auth";
 import { listBrands, saveBrand } from "@/lib/db";
 import { scrapeSiteCached, type SiteInfo } from "@/lib/scrape";
+import { ndjson, wantsStream } from "@/lib/stream";
 import { LANGUAGES, type Brand, type Language } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -39,19 +40,24 @@ export const POST = handle(async (req: Request) => {
     }
   }
 
-  const draft = await buildBrandProfile(site, { name: body.name, language, notes });
-  const brand: Brand = {
-    ...draft,
-    id: nanoid(10),
-    ownerId: user.id,
-    headline: site?.headline || undefined,
-    website: site?.url ?? body.website,
-    instagram: body.instagram?.replace(/^@/, ""),
-    logoUrl: site?.logoUrl,
-    language,
-    referenceReels: (body.referenceReels ?? []).map((r) => r.trim()).filter((r) => /^https?:\/\//.test(r)).slice(0, 6),
-    createdAt: new Date().toISOString(),
+  const create = async (onPartial?: (p: Record<string, unknown>) => void) => {
+    const draft = await buildBrandProfile(site, { name: body.name, language, notes }, onPartial);
+    const brand: Brand = {
+      ...draft,
+      id: nanoid(10),
+      ownerId: user.id,
+      headline: site?.headline || undefined,
+      website: site?.url ?? body.website,
+      instagram: body.instagram?.replace(/^@/, ""),
+      logoUrl: site?.logoUrl,
+      language,
+      referenceReels: (body.referenceReels ?? []).map((r) => r.trim()).filter((r) => /^https?:\/\//.test(r)).slice(0, 6),
+      createdAt: new Date().toISOString(),
+    };
+    await saveBrand(brand);
+    return { brand, warning };
   };
-  await saveBrand(brand);
-  return Response.json({ brand, warning });
+  // The onboarding screen asks for a stream so the brand kit fills in as it's written.
+  if (wantsStream(req)) return ndjson((send) => create(send));
+  return Response.json(await create());
 });

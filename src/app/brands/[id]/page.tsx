@@ -3,9 +3,17 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api } from "@/lib/client";
+import { api, apiStream } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
-import type { Brand, Plan, Reel } from "@/lib/types";
+import type { Brand, Plan, PlanIdea, Reel } from "@/lib/types";
+
+/** Ideas that are far enough along to show while the plan is still streaming. */
+function shownIdeas(partial: { ideas?: Partial<PlanIdea>[] }): PlanIdea[] {
+  return (partial.ideas ?? [])
+    .filter((i) => i && i.title && (i.template === "showcase" || i.template === "beforeAfter" || i.template === "tips"))
+    .map((i) => ({ title: i.title!, template: i.template!, hook: i.hook ?? "", needsMedia: i.needsMedia ?? "" }));
+}
+
 
 export default function BrandDashboard() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +33,11 @@ export default function BrandDashboard() {
     setPlanning(true);
     setError("");
     try {
-      setPlan(await api<Plan>(`/api/brands/${id}/plan`, { method: "POST" }));
+      const draft = (p: { ideas?: Partial<PlanIdea>[] }) => {
+        const ideas = shownIdeas(p);
+        if (ideas.length) setPlan({ brandId: id, ideas, createdAt: new Date().toISOString() });
+      };
+      setPlan(await apiStream<Plan, { ideas?: Partial<PlanIdea>[] }>(`/api/brands/${id}/plan`, { method: "POST" }, draft));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -106,12 +118,16 @@ export default function BrandDashboard() {
                     <p className="text-sm font-bold">{idea.title}</p>
                     <p className="text-sm text-ink/70">“{idea.hook}”</p>
                     <p className="text-xs text-ink/45 mt-1">📷 {idea.needsMedia}</p>
-                    <Link
-                      href={`/brands/${id}/new?template=${idea.template}&topic=${encodeURIComponent(`${idea.title}: ${idea.hook}`)}`}
-                      className="mt-2 inline-block text-xs font-bold text-coral"
-                    >
-                      Make this Reel →
-                    </Link>
+                    {planning ? (
+                      <span className="mt-2 inline-block text-xs text-ink/40">Writing…</span>
+                    ) : (
+                      <Link
+                        href={`/brands/${id}/new?template=${idea.template}&topic=${encodeURIComponent(`${idea.title}: ${idea.hook}`)}`}
+                        className="mt-2 inline-block text-xs font-bold text-coral"
+                      >
+                        Make this Reel →
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>

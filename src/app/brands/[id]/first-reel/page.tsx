@@ -4,9 +4,17 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
-import { api } from "@/lib/client";
+import { api, apiStream } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
 import type { Brand, Plan, PlanIdea, Reel } from "@/lib/types";
+
+/** Ideas that are far enough along to show while the plan is still streaming. */
+function shownIdeas(partial: { ideas?: Partial<PlanIdea>[] }): PlanIdea[] {
+  return (partial.ideas ?? [])
+    .filter((i) => i && i.title && (i.template === "showcase" || i.template === "beforeAfter" || i.template === "tips"))
+    .map((i) => ({ title: i.title!, template: i.template!, hook: i.hook ?? "", needsMedia: i.needsMedia ?? "" }));
+}
+
 
 function Step({ n, title, sub, children }: { n: number; title: string; sub?: string; children: React.ReactNode }) {
   return (
@@ -30,6 +38,7 @@ export default function FirstReel() {
   const [editing, setEditing] = useState<number | null>(null);
   const [mediaIds, setMediaIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -37,11 +46,19 @@ export default function FirstReel() {
     (async () => {
       try {
         const existing = await api<Plan | null>(`/api/brands/${id}/plan`);
-        const plan = existing ?? (await api<Plan>(`/api/brands/${id}/plan`, { method: "POST" }));
+        if (existing) return setIdeas(existing.ideas);
+        // Show ideas one by one as they're written.
+        setStreaming(true);
+        const plan = await apiStream<Plan, { ideas?: Partial<PlanIdea>[] }>(`/api/brands/${id}/plan`, { method: "POST" }, (p) => {
+          const shown = shownIdeas(p);
+          if (shown.length) setIdeas(shown);
+        });
         setIdeas(plan.ideas);
       } catch (e) {
         setError((e as Error).message);
         setIdeas([]);
+      } finally {
+        setStreaming(false);
       }
     })();
   }, [id]);
@@ -158,8 +175,8 @@ export default function FirstReel() {
 
       <div className="flex items-center justify-end gap-4 pb-10">
         {needsTwo && <p className="text-sm text-ink/55">Select a before and an after photo</p>}
-        <button className="btn-primary px-8 py-3 text-base" onClick={make} disabled={!idea || busy || needsTwo}>
-          {busy ? "Making your Reel…" : "Make it ✨"}
+        <button className="btn-primary px-8 py-3 text-base" onClick={make} disabled={!idea || busy || needsTwo || streaming}>
+          {busy ? "Making your Reel…" : streaming ? "Writing ideas…" : "Make it ✨"}
         </button>
       </div>
     </div>

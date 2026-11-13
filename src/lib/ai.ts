@@ -47,6 +47,74 @@ async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>):
   throw new Error(`AI returned invalid data: ${lastError}`);
 }
 
+/**
+ * Best-effort parse of an unfinished JSON object (closes open strings/brackets, drops a dangling key),
+ * so the UI can show fields while the AI is still writing.
+ */
+export function parsePartialJson(text: string): Record<string, unknown> | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let src = text.slice(start);
+  for (let attempt = 0; attempt < 60 && src.length > 1; attempt++) {
+    const stack: string[] = [];
+    let inStr = false;
+    let esc = false;
+    for (const ch of src) {
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === "{" || ch === "[") stack.push(ch === "{" ? "}" : "]");
+      else if (ch === "}" || ch === "]") stack.pop();
+    }
+    let fixed = src;
+    if (inStr) fixed += esc ? '\\"' : '"';
+    fixed = fixed.replace(/[,:\s]+$/, "");
+    fixed += stack.reverse().join("");
+    try {
+      const v = JSON.parse(fixed);
+      return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+    } catch {
+      // Drop the last partial token (e.g. a key without a value, half a number or literal) and try again.
+      const cut = Math.max(src.lastIndexOf(","), src.lastIndexOf("{"), src.lastIndexOf("["));
+      if (cut <= 0) return null;
+      src = src[cut] === "," ? src.slice(0, cut) : src.slice(0, cut + 1);
+    }
+  }
+  return null;
+}
+
+export type OnPartial = (partial: Record<string, unknown>) => void;
+
+/** Like askJson, but streams: calls onPartial with the object-so-far as the AI writes it. */
+async function streamJson<T>(system: string, prompt: string, schema: z.ZodType<T>, onPartial: OnPartial): Promise<T> {
+  const stream = getClient().messages.stream({
+    model: MODEL,
+    max_tokens: 2000,
+    system: system + "\n\nRespond with a single JSON object only. No markdown fences, no commentary.",
+    messages: [{ role: "user", content: prompt }],
+  });
+  let text = "";
+  let last = 0;
+  stream.on("text", (delta) => {
+    text += delta;
+    const now = Date.now();
+    if (now - last < 120) return;
+    last = now;
+    const p = parsePartialJson(text);
+    if (p) onPartial(p);
+  });
+  await stream.finalMessage();
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  try {
+    const parsed = schema.safeParse(JSON.parse(json));
+    if (parsed.success) return parsed.data;
+  } catch {}
+  // Rare: the streamed answer didn't validate – fall back to the (retrying) non-streamed path.
+  return askJson(system, prompt, schema);
+}
+
 // ---------- Brand profile ----------
 
 const brandSchema = z.object({
@@ -67,9 +135,13 @@ const brandSchema = z.object({
 
 export type BrandDraft = z.infer<typeof brandSchema>;
 
-export async function buildBrandProfile(site: SiteInfo | null, opts: { name?: string; language: Language; notes?: string }): Promise<BrandDraft> {
+export async function buildBrandProfile(
+  site: SiteInfo | null,
+  opts: { name?: string; language: Language; notes?: string },
+  onPartial?: OnPartial,
+): Promise<BrandDraft> {
   if (!aiEnabled()) return mockBrand(site, opts);
-  return askJson(
+  return (onPartial ? (s: string, p: string, sc: typeof brandSchema) => streamJson(s, p, sc, onPartial) : askJson)(
     "You are a brand strategist building a brand profile that an automated short-video tool will follow. Be concrete and faithful to the source; never invent prices, awards or guarantees.",
     `Build a brand profile from this business information.
 
@@ -241,7 +313,7 @@ const planSchema = z.object({
     .max(10),
 });
 
-export async function generatePlan(brand: Brand): Promise<PlanIdea[]> {
+export async function generatePlan(brand: Brand, onPartial?: OnPartial): Promise<PlanIdea[]> {
   if (!aiEnabled()) {
     return [
       { title: "Meet the business", template: "showcase", hook: `Behind the scenes at ${brand.name}`, needsMedia: "3-5 photos of your space and team" },
@@ -251,7 +323,8 @@ export async function generatePlan(brand: Brand): Promise<PlanIdea[]> {
       { title: "Myth vs fact", template: "tips", hook: "Stop believing this", needsMedia: "Optional" },
     ];
   }
-  const res = await askJson(
+  const ask = onPartial ? (s: string, p: string, sc: typeof planSchema) => streamJson(s, p, sc, onPartial) : askJson;
+  const res = await ask(
     "You plan a week of short-video content for a small business. Ideas must be easy to film on a phone in a few minutes.",
     `${brandBrief(brand)}
 

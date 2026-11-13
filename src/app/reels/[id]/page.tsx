@@ -71,10 +71,26 @@ export default function ReelPage() {
       setEditing(null);
     });
 
+  const [renderPct, setRenderPct] = useState<number | null>(null);
+
   const download = () =>
     run("render", async () => {
-      const { url } = await api<{ url: string }>(`/api/reels/${id}/render`, { method: "POST" });
-      window.location.href = url;
+      setRenderPct(0);
+      // Poll the render's progress while the POST waits for it to finish.
+      const poll = setInterval(async () => {
+        try {
+          const s = await api<{ state: string; progress: number }>(`/api/reels/${id}/render`);
+          if (s.state === "rendering") setRenderPct(s.progress);
+        } catch {}
+      }, 1500);
+      try {
+        const { url } = await api<{ url: string }>(`/api/reels/${id}/render`, { method: "POST" });
+        setRenderPct(100);
+        window.location.href = url;
+      } finally {
+        clearInterval(poll);
+        setTimeout(() => setRenderPct(null), 800);
+      }
     });
 
   async function copyCaption() {
@@ -105,8 +121,13 @@ export default function ReelPage() {
             {reel.status === "approved" ? (
               <>
                 <button className="btn-primary py-3" onClick={download} disabled={!!busy}>
-                  {busy === "render" ? "Rendering video… (about a minute)" : "⬇ Download MP4"}
+                  {busy === "render" ? `Creating video… ${renderPct ? `${renderPct}%` : ""}` : "⬇ Download MP4"}
                 </button>
+                {busy === "render" && renderPct !== null && (
+                  <div className="h-2 overflow-hidden rounded-full bg-black/5" aria-label="Video progress">
+                    <div className="h-full rounded-full bg-coral transition-all duration-700" style={{ width: `${Math.max(3, renderPct)}%` }} />
+                  </div>
+                )}
                 <MetaPost reel={reel} onChange={setReel} />
                 <TikTokPost reel={reel} onChange={setReel} />
                 <LinkedInPost reel={reel} onChange={setReel} />
