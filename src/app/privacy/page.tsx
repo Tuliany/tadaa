@@ -57,12 +57,15 @@ export default function Privacy() {
       <h2>5. Who we share data with</h2>
       <p>We use these service providers (&quot;processors&quot;), each only for the purpose listed:</p>
       <ul>
-        <li><strong>Railway</strong> – hosting of the app, database and uploaded files.</li>
+        <li><strong>Railway</strong> – hosting of the app, database and uploaded files, in the EU (Amsterdam, the Netherlands).</li>
         <li><strong>Anthropic</strong> – AI text generation.</li>
         <li><strong>Resend</strong> – sending service emails such as password resets.</li>
         <li><strong>Cloudflare</strong> – domain name service and network security.</li>
         <li><strong>Meta, LinkedIn, TikTok and Google</strong> – only when you connect those accounts, to publish content or read files you choose.</li>
       </ul>
+      <p>
+        Your account, brands, uploaded photos and videos and finished Reels are stored in the EU (Amsterdam, the Netherlands).
+      </p>
       <p>
         Some of these providers process data outside the EU/EEA, including in the United States. Where they do, transfers rely on the EU–US Data
         Privacy Framework or the European Commission&apos;s standard contractual clauses.
