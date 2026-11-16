@@ -14,7 +14,7 @@ interface Hit {
   portrait: boolean;
 }
 
-const SUGGESTIONS = ["surprised", "celebrating", "laughing", "facepalm", "thumbs up", "dancing", "coffee", "office"];
+const SUGGESTIONS = ["laughing", "stressed", "happy", "tired", "waiting", "confused", "success", "coffee"];
 
 /** Search licence-free vertical stock clips (Pixabay or Pexels) and add one to the brand's library. */
 export default function StockClipSearch({
