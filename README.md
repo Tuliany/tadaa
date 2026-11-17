@@ -41,10 +41,6 @@ After changing anything in `src/remotion/`, delete `data/.remotion-bundle` so re
 
 Rendering needs a real server with Chromium, so use a container host (Railway, Fly.io, Render or a VPS) rather than Vercel serverless functions. The included `Dockerfile` runs everything in one container; mount a persistent volume at `/data` and set `ANTHROPIC_API_KEY`.
 
-## Next steps
+## Roadmap
 
-1. Accounts and logins (Supabase Auth), with each brand belonging to a user
-2. Move `db.ts` / `storage.ts` to Supabase so you can run more than one server
-3. Stripe subscriptions
-4. Automatic Instagram posting (requires Meta app review)
-5. More templates, music, animated captions for clips with speech
+See [ROADMAP.md](ROADMAP.md) for what's done and what's next.
