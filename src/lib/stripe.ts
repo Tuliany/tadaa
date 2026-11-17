@@ -21,6 +21,11 @@ export function stripe() {
 
 const LOOKUP: Record<PaidPlanId, string> = { starter: "tadaa_starter_monthly_eur", pro: "tadaa_pro_monthly_eur" };
 
+/** Stripe as merchant of record (Managed Payments): Stripe handles VAT, fraud and disputes. */
+export const managedPayments = () => process.env.STRIPE_MANAGED_PAYMENTS === "1";
+/** Product tax code: Software as a Service – business use (eligible for Managed Payments). */
+const TAX_CODE = "txcd_10103001";
+
 /** Price ids for the paid plans, creating the product/price the first time. */
 export function priceIds() {
   return (g.__tadaaPrices ??= (async () => {
@@ -31,12 +36,18 @@ export function priceIds() {
       const existing = found.data.find((p) => p.lookup_key === LOOKUP[plan]);
       if (existing) {
         out[plan] = existing.id;
+        // Products made before the tax code was set get it now (Managed Payments needs one).
+        const productId = typeof existing.product === "string" ? existing.product : existing.product.id;
+        const product = await s.products.retrieve(productId);
+        const code = typeof product.tax_code === "string" ? product.tax_code : product.tax_code?.id;
+        if (code !== TAX_CODE) await s.products.update(productId, { tax_code: TAX_CODE });
         continue;
       }
       const p = PLANS[plan];
       const product = await s.products.create({
         name: `Tadaa ${p.name}`,
         description: `${p.reels} Reels a month, ${p.brands === 1 ? "1 brand" : `up to ${p.brands} brands`}, no watermark.`,
+        tax_code: TAX_CODE,
         metadata: { plan },
       });
       const price = await s.prices.create({
@@ -75,16 +86,22 @@ export async function customerFor(user: User) {
 
 export async function checkoutUrl(user: User, plan: PaidPlanId, origin: string) {
   const prices = await priceIds();
+  // With Managed Payments, Stripe collects the address and VAT details itself and some options aren't allowed.
+  const taxOptions = managedPayments()
+    ? { managed_payments: { enabled: true } }
+    : {
+        billing_address_collection: "required" as const,
+        tax_id_collection: { enabled: true },
+        customer_update: { name: "auto" as const, address: "auto" as const },
+        ...(process.env.STRIPE_AUTOMATIC_TAX === "1" ? { automatic_tax: { enabled: true } } : {}),
+      };
   const session = await stripe().checkout.sessions.create({
     mode: "subscription",
     customer: await customerFor(user),
     client_reference_id: user.id,
     line_items: [{ price: prices[plan], quantity: 1 }],
     allow_promotion_codes: true,
-    billing_address_collection: "required",
-    tax_id_collection: { enabled: true },
-    customer_update: { name: "auto", address: "auto" },
-    ...(process.env.STRIPE_AUTOMATIC_TAX === "1" ? { automatic_tax: { enabled: true } } : {}),
+    ...taxOptions,
     subscription_data: { metadata: { userId: user.id, plan } },
     success_url: `${origin}/account?billing=success`,
     cancel_url: `${origin}/pricing?billing=cancelled`,

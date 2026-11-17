@@ -65,7 +65,8 @@ export default function Terms() {
       </p>
       <p>
         Paid plans are monthly subscriptions, billed in advance through our payment provider Stripe, and renew automatically each month until
-        you cancel. Each plan includes a number of Reels per billing month; unused Reels don&apos;t carry over. You can change plan or cancel at
+        you cancel. Stripe (through its affiliate Link) may act as the reseller and merchant of record for your payment, in which case it
+        calculates and charges VAT and issues your receipts and invoices. Each plan includes a number of Reels per billing month; unused Reels don&apos;t carry over. You can change plan or cancel at
         any time under Account → Manage billing; a cancellation takes effect at the end of the month you have paid for, and you keep your plan
         until then. Paid months are not refunded, except where the law requires it.
       </p>
