@@ -1,3 +1,4 @@
+import { PLANS, planOf, reelsUsed } from "./plans";
 import { deleteFile } from "./storage";
 import { keyOf, store, type Tx } from "./store";
 import type { Brand, MediaItem, OAuthClient, SocialConnection, SocialProvider, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
@@ -208,4 +209,79 @@ export function initSetting<T>(id: string, value: T) {
 }
 export async function setSetting<T>(id: string, value: T) {
   await db().put("settings", id, { id, value });
+}
+
+// Plans & usage
+export async function updateUser(id: string, patch: Partial<User>) {
+  return db().tx(async (t) => {
+    const u = await t.get<User>("users", { id });
+    if (!u) throw new Error("NO_USER");
+    const next = { ...u, ...patch };
+    await t.put("users", u.id, next);
+    return next;
+  });
+}
+export async function getUserByStripeCustomer(stripeCustomerId: string) {
+  return db().get<User>("users", { stripeCustomerId });
+}
+
+/** Thrown when an action is over the plan's allowance. `kind` says which. */
+export class PlanLimitError extends Error {
+  constructor(public kind: "reels" | "brands", message: string) {
+    super(message);
+  }
+}
+
+/** Counts one new Reel against the user's allowance, or throws PlanLimitError if none are left. */
+export function countReel(userId: string) {
+  return db().tx(async (t) => {
+    const u = await t.get<User>("users", { id: userId });
+    if (!u) throw new Error("NO_USER");
+    const plan = planOf(u);
+    const limit = PLANS[plan].reels;
+    const used = reelsUsed(u);
+    if (used >= limit) {
+      throw new PlanLimitError(
+        "reels",
+        plan === "trial"
+          ? `You've used your ${limit} free Reels. Choose a plan to keep creating.`
+          : `You've used all ${limit} Reels in your ${PLANS[plan].name} plan this month. Upgrade, or wait until it renews.`,
+      );
+    }
+    if (plan === "unlimited") return;
+    const usage =
+      plan === "trial"
+        ? { ...u.usage, trial: used + 1 }
+        : { ...u.usage, periodStart: u.subscription!.currentPeriodStart, period: used + 1 };
+    await t.put("users", u.id, { ...u, usage });
+  });
+}
+
+/** Gives a Reel back when creating it failed after it was counted. */
+export function refundReel(userId: string) {
+  return db().tx(async (t) => {
+    const u = await t.get<User>("users", { id: userId });
+    if (!u || !u.usage) return;
+    const plan = planOf(u);
+    const usage = { ...u.usage };
+    if (plan === "trial" && usage.trial) usage.trial--;
+    else if ((plan === "starter" || plan === "pro") && usage.period && usage.periodStart === u.subscription?.currentPeriodStart) usage.period--;
+    else return;
+    await t.put("users", u.id, { ...u, usage });
+  });
+}
+
+/** Throws PlanLimitError if the user can't add another brand. */
+export async function checkBrandAllowance(user: User) {
+  const plan = planOf(user);
+  const limit = PLANS[plan].brands;
+  const owned = (await db().find<Brand>("brands", { ownerId: user.id })).length;
+  if (owned >= limit) {
+    throw new PlanLimitError(
+      "brands",
+      plan === "pro"
+        ? `Your Pro plan includes up to ${limit} brands.`
+        : `Your ${PLANS[plan].name} includes ${limit} brand. Upgrade to Pro for up to ${PLANS.pro.brands}.`,
+    );
+  }
 }

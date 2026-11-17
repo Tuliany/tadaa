@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { generatePlan, reviseReelScript, writeReelScript } from "./ai";
 import { pickStyle } from "./styles";
-import { getBrand, getPlan, getReel, listBrands, listMedia, listReels, saveReel, savePlan } from "./db";
+import { PlanLimitError, getBrand, getPlan, getReel, listBrands, listMedia, listReels, savePlan, saveReel, countReel } from "./db";
 import { signDownload } from "./oauth";
 import { hasRender, renderError, renderState, startRender } from "./render";
 import { TEMPLATES } from "./templates";
@@ -252,6 +252,12 @@ export const TOOLS = [
         throw new ToolError("Before & After needs two photos: the before first, then the after. Pass them in media_ids.");
       }
       const now = new Date().toISOString();
+      try {
+        await countReel(ctx.user.id);
+      } catch (e) {
+        if (e instanceof PlanLimitError) throw new ToolError(`${e.message} The user can choose a plan at ${ctx.origin}/pricing.`);
+        throw e;
+      }
       const reel: Reel = {
         id: nanoid(10),
         brandId: b.id,

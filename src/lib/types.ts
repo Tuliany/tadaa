@@ -15,12 +15,27 @@ export interface BrandColors {
   background: string;
 }
 
+export type PaidPlanId = "starter" | "pro";
+
 export interface User {
   id: string;
   email: string;
   name: string;
   passwordHash: string;
   createdAt: string;
+  /** Stripe customer for this account (set at first checkout). */
+  stripeCustomerId?: string;
+  /** The current Stripe subscription, kept in sync by the webhook. */
+  subscription?: {
+    id: string;
+    plan: PaidPlanId;
+    status: string;
+    currentPeriodStart: string;
+    currentPeriodEnd: string;
+    cancelAtPeriodEnd: boolean;
+  };
+  /** Reels created: `trial` counts forever, `period` resets with each billing period. */
+  usage?: { trial?: number; periodStart?: string; period?: number };
 }
 
 export interface Session {
@@ -133,6 +148,8 @@ export interface Reel {
   status: ReelStatus;
   revisions: Revision[];
   renderFile?: string;
+  /** Whether the stored MP4 has the free-trial watermark. */
+  renderWatermark?: boolean;
   /** Where this Reel has been posted (newest last). */
   publications?: Publication[];
   createdAt: string;
@@ -210,6 +227,8 @@ export interface Plan {
 /** Props passed to the Remotion composition (browser preview and MP4 render). */
 export interface ReelRenderProps {
   brand: Pick<Brand, "name" | "colors" | "logoUrl">;
+  /** Free-trial Reels carry a small "Made with Tadaa" mark. */
+  watermark?: boolean;
   script: ReelScript;
   media: { id: string; url: string; kind: "image" | "video" }[];
   [key: string]: unknown;

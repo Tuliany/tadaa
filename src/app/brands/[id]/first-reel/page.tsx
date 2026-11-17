@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ErrorNote from "@/components/ErrorNote";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
@@ -206,7 +207,7 @@ export default function FirstReel() {
         </Step>
       )}
 
-      {error && <p className="rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
+      <ErrorNote error={error} />
 
       <div className="flex items-center justify-end gap-4 pb-10">
         {needsTwo && <p className="text-sm text-ink/55">Select a before and an after photo</p>}

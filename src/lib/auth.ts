@@ -1,7 +1,7 @@
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { promisify } from "util";
-import { deleteSession, getBrand, getMedia, getReel, getSession, getUser, saveSession } from "./db";
+import { PlanLimitError, deleteSession, getBrand, getMedia, getReel, getSession, getUser, saveSession } from "./db";
 import type { Brand, User } from "./types";
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
@@ -106,6 +106,8 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
       return await fn(...args);
     } catch (e) {
       if (e instanceof HttpError) return Response.json({ error: e.message }, { status: e.status });
+      // Over the plan's allowance: 402 + a code the app uses to show "See plans".
+      if (e instanceof PlanLimitError) return Response.json({ error: e.message, code: "PLAN_LIMIT", limit: e.kind }, { status: 402 });
       if (e instanceof Error && (e.name === "TikTokError" || e.name === "MetaError" || e.name === "LinkedInError")) return Response.json({ error: e.message }, { status: 400 });
       console.error(e);
       return Response.json({ error: "Something went wrong. Please try again." }, { status: 500 });

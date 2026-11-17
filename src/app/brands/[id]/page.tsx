@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ErrorNote from "@/components/ErrorNote";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, apiStream } from "@/lib/client";
@@ -63,7 +64,7 @@ export default function BrandDashboard() {
         </div>
       </div>
 
-      {error && <p className="mt-6 rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
+      <ErrorNote error={error} className="mt-6" />
 
       <div className="mt-8 grid xl:grid-cols-[1fr_340px] gap-8">
         <section>

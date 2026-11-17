@@ -60,8 +60,19 @@ export default function Terms() {
 
       <h2>7. Prices and payment</h2>
       <p>
-        During the current early-access period the Service is free. Before any paid plan applies to you, we will show its price and terms, and
-        nothing will be charged without your agreement.
+        New accounts start with a free trial of 3 Reels, which carry a small &quot;Made with Tadaa&quot; mark. Paid plans and their prices are
+        shown on our <Link href="/pricing">pricing page</Link>. Prices are in euro and include VAT where it applies.
+      </p>
+      <p>
+        Paid plans are monthly subscriptions, billed in advance through our payment provider Stripe, and renew automatically each month until
+        you cancel. Each plan includes a number of Reels per billing month; unused Reels don&apos;t carry over. You can change plan or cancel at
+        any time under Account → Manage billing; a cancellation takes effect at the end of the month you have paid for, and you keep your plan
+        until then. Paid months are not refunded, except where the law requires it.
+      </p>
+      <p>
+        If a payment fails, Stripe will retry it for a short period; if it still fails, your account returns to the free trial limits. We may
+        change prices with at least 30 days&apos; notice by email; the new price applies from your next billing month after that, and you can
+        cancel before it does.
       </p>
 
       <h2>8. Availability and liability</h2>

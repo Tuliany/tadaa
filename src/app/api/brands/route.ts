@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { buildBrandProfile } from "@/lib/ai";
 import { handle, HttpError, requireUser } from "@/lib/auth";
-import { listBrands, saveBrand } from "@/lib/db";
+import { checkBrandAllowance, listBrands, saveBrand } from "@/lib/db";
 import { scrapeSiteCached, type SiteInfo } from "@/lib/scrape";
 import { ndjson, wantsStream } from "@/lib/stream";
 import { LANGUAGES, type Brand, type Language } from "@/lib/types";
@@ -25,6 +25,7 @@ export const POST = handle(async (req: Request) => {
     notes?: string;
   };
   const notes = [body.description, body.notes].filter(Boolean).join("\n");
+  await checkBrandAllowance(user);
   if (!body.website && !body.name && !notes) {
     throw new HttpError(400, "Enter your website or tell us about your business.");
   }

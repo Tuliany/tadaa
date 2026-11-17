@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import PlanBanner from "@/components/PlanBanner";
 import { api } from "@/lib/client";
 import type { Brand } from "@/lib/types";
 
@@ -17,6 +18,7 @@ export default function Brands() {
         <h1 className="text-3xl font-black tracking-tight">My brands</h1>
         <Link href="/onboarding" className="btn-primary">Add a brand</Link>
       </div>
+      <PlanBanner />
       {brands === null ? (
         <p className="mt-8 text-ink/50">Loading…</p>
       ) : brands.length === 0 ? (

@@ -24,6 +24,7 @@ export default function Privacy() {
       <h2>2. What we collect</h2>
       <ul>
         <li><strong>Account data:</strong> your name, email address and a securely hashed password (we never store the password itself).</li>
+        <li><strong>Billing data:</strong> if you buy a plan: your plan, its status and renewal date, and the billing name, address and VAT number you give Stripe at checkout. Bookkeeping law requires us to keep invoices for 7 years.</li>
         <li>
           <strong>Brand data you give us:</strong> your website address, a description of your business, links to example Reels, and the brand
           profile we create from them (name, tone of voice, products, colours, logo).
@@ -60,6 +61,7 @@ export default function Privacy() {
         <li><strong>Railway</strong> – hosting of the app, database and uploaded files, in the EU (Amsterdam, the Netherlands).</li>
         <li><strong>Anthropic</strong> – AI text generation.</li>
         <li><strong>Resend</strong> – sending service emails such as password resets.</li>
+        <li><strong>Stripe</strong> – payments for paid plans. Stripe receives your card details directly; we never see or store them. We keep your Stripe customer id and your plan&apos;s status.</li>
         <li><strong>Cloudflare</strong> – domain name service and network security.</li>
         <li><strong>Meta, LinkedIn, TikTok and Google</strong> – only when you connect those accounts, to publish content or read files you choose.</li>
       </ul>

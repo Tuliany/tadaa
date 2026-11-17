@@ -410,7 +410,37 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
   );
 }
 
-export const Reel: React.FC<ReelRenderProps> = (props) => {
+/** Small "Made with Tadaa" mark on free-trial Reels. */
+function Watermark() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 70,
+        right: 40,
+        padding: "10px 22px",
+        borderRadius: 999,
+        background: "rgba(0,0,0,0.55)",
+        color: "#fff",
+        fontFamily: FONTS.inter,
+        fontWeight: 700,
+        fontSize: 30,
+        letterSpacing: 0.3,
+      }}
+    >
+      Made with <span style={{ color: "#ff6b5b" }}>Tadaa!</span>
+    </div>
+  );
+}
+
+export const Reel: React.FC<ReelRenderProps> = (props) => (
+  <AbsoluteFill>
+    <ReelBody {...props} />
+    {props.watermark && <Watermark />}
+  </AbsoluteFill>
+);
+
+const ReelBody: React.FC<ReelRenderProps> = (props) => {
   const { script } = props;
   const s = styleOf(script);
   if (script.template === "meme") {

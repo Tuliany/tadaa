@@ -29,6 +29,7 @@ export default function HeaderNav() {
   if (!me) {
     return (
       <nav className="flex items-center gap-5 text-sm font-medium text-ink/70">
+        <Link href="/pricing" className="hover:text-ink">Pricing</Link>
         <Link href="/login" className="hover:text-ink">Log in</Link>
         <Link href="/signup" className="rounded-full bg-ink text-white px-4 py-1.5 hover:bg-ink/85">Start free</Link>
       </nav>
@@ -37,6 +38,7 @@ export default function HeaderNav() {
   return (
     <nav className="flex items-center gap-5 text-sm font-medium text-ink/70">
       <Link href="/brands" className="hover:text-ink">My brands</Link>
+      <Link href="/pricing" className="hidden sm:inline hover:text-ink">Pricing</Link>
       <Link href="/account" className="hidden sm:inline text-ink/40 hover:text-ink">{me.email}</Link>
       <button onClick={logout} className="hover:text-ink">Log out</button>
     </nav>

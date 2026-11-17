@@ -2,12 +2,14 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import ErrorNote from "@/components/ErrorNote";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ClipTrimmer from "@/components/ClipTrimmer";
 import LinkedInPost from "@/components/LinkedInPost";
 import MetaPost from "@/components/MetaPost";
 import TikTokPost from "@/components/TikTokPost";
+import { fetchBilling } from "@/lib/billing-client";
 import { api } from "@/lib/client";
 import { mediaUrl, toRenderProps } from "@/lib/props";
 import { TEMPLATES } from "@/lib/templates";
@@ -47,7 +49,16 @@ export default function ReelPage() {
     })();
   }, [id]);
 
-  const props = useMemo(() => (reel && brand ? toRenderProps(brand, editing ? { ...reel, script: editing } : reel, media) : null), [reel, brand, media, editing]);
+  const [watermark, setWatermark] = useState(false);
+  useEffect(() => {
+    fetchBilling()
+      .then((b) => setWatermark(!!b?.watermark))
+      .catch(() => {});
+  }, []);
+  const props = useMemo(
+    () => (reel && brand ? { ...toRenderProps(brand, editing ? { ...reel, script: editing } : reel, media), watermark } : null),
+    [reel, brand, media, editing, watermark],
+  );
 
   async function run<T>(kind: typeof busy, fn: () => Promise<T>) {
     setBusy(kind);
@@ -147,7 +158,7 @@ export default function ReelPage() {
         </div>
 
         <div className="space-y-6">
-          {error && <p className="rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
+          <ErrorNote error={error} />
 
           <div className="card p-5">
             <h2 className="font-bold">Want a change?</h2>

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { writeReelScript } from "@/lib/ai";
 import { handle, HttpError, requireBrand } from "@/lib/auth";
-import { listMedia, listReels, saveBrand, saveReel } from "@/lib/db";
+import { listMedia, listReels, refundReel, saveBrand, saveReel, countReel } from "@/lib/db";
 import { isStyleId, pickStyle } from "@/lib/styles";
 import { TEMPLATES } from "@/lib/templates";
 import { MEME_MAX_SECONDS } from "@/lib/templates";
@@ -47,7 +47,7 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[
 });
 
 export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[id]/reels">) => {
-  const { brand } = await requireBrand((await ctx.params).id);
+  const { brand, user } = await requireBrand((await ctx.params).id);
   const id = brand.id;
 
   const body = (await req.json()) as {
@@ -69,6 +69,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
   }
   if (template === "meme" && !media.length) throw new HttpError(400, "A meme needs a clip.");
 
+  // Counts against the plan; given back below if writing the Reel fails.
+  await countReel(user.id);
   try {
     // A look learned from a reference video, else a built-in look (else the brand's best match).
     const ref = body.referenceId ? brand.references?.find((r) => r.id === body.referenceId) : undefined;
@@ -100,6 +102,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
     await saveReel(reel);
     return Response.json(reel);
   } catch (e) {
+    await refundReel(user.id).catch(() => {});
     throw new HttpError(502, `Could not write the Reel: ${(e as Error).message}`);
   }
 });

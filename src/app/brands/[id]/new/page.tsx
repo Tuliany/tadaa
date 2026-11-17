@@ -1,5 +1,6 @@
 "use client";
 
+import ErrorNote from "@/components/ErrorNote";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import ClipTrimmer from "@/components/ClipTrimmer";
@@ -204,7 +205,7 @@ function NewReel() {
         </section>
       )}
 
-      {error && <p className="mt-6 rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
+      <ErrorNote error={error} className="mt-6" />
 
       <div className="mt-8 flex items-center justify-end gap-4">
         {needsTwo && <p className="text-sm text-ink/55">Select a before and an after photo</p>}

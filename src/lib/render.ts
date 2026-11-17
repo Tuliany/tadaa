@@ -3,7 +3,8 @@ import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
 import { renderToken } from "./auth";
-import { getReel, listMedia, saveReel } from "./db";
+import { getBrand, getReel, getUser, listMedia, saveReel } from "./db";
+import { PLANS, planOf } from "./plans";
 import { toRenderProps } from "./props";
 import { fileSize, renderScratchPath, saveFile } from "./storage";
 import type { Brand, Reel } from "./types";
@@ -46,9 +47,17 @@ function runRender(propsFile: string, outFile: string, onProgress?: (pct: number
   });
 }
 
-/** True if the Reel's MP4 is stored. */
+/** Free-trial Reels get the "Made with Tadaa" mark (decided by the brand owner's plan). */
+export async function needsWatermark(brandId: string) {
+  const brand = await getBrand(brandId);
+  const owner = brand?.ownerId ? await getUser(brand.ownerId) : null;
+  return owner ? PLANS[planOf(owner)].watermark : true;
+}
+
+/** True if the Reel's MP4 is stored and matches the owner's plan (watermark or not). */
 export async function hasRender(reel: Reel) {
   if (!reel.renderFile) return false;
+  if (!!reel.renderWatermark !== (await needsWatermark(reel.brandId))) return false;
   return (await fileSize("renders", reel.renderFile).catch(() => null)) !== null;
 }
 
@@ -72,7 +81,8 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
     const media = await listMedia(brand.id);
     // The renderer runs in this container, so load media over loopback rather than the public URL.
     const origin = process.env.TADAA_RENDER_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3000}`;
-    const props = toRenderProps(brand, reel, media, origin);
+    const watermark = await needsWatermark(brand.id);
+    const props = { ...toRenderProps(brand, reel, media, origin), watermark };
     // The renderer has no login cookie; give it this process's render token for our own media URLs.
     const withToken = (u?: string) => (u && u.startsWith(`${origin}/api/media/`) ? `${u}?rt=${renderToken()}` : u);
     props.media = props.media.map((m) => ({ ...m, url: withToken(m.url)! }));
@@ -89,7 +99,7 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
       fs.unlink(propsFile).catch(() => {});
     }
     const latest = await getReel(id);
-    if (latest) await saveReel({ ...latest, renderFile: fileName });
+    if (latest) await saveReel({ ...latest, renderFile: fileName, renderWatermark: watermark });
     return fileName;
   })();
   job

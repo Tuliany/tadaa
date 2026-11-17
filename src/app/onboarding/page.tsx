@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ErrorNote from "@/components/ErrorNote";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, apiStream } from "@/lib/client";
@@ -124,7 +125,7 @@ export default function Onboarding() {
               ))}
             </select>
           </div>
-          {error && <p className="rounded-xl bg-red-50 text-red-700 text-sm px-4 py-3">{error}</p>}
+          <ErrorNote error={error} />
           <button className="btn-dark px-8 py-3 text-base" disabled={!website.trim() && !description.trim()}>
             Start →
           </button>
