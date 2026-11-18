@@ -158,3 +158,15 @@ export async function decrypt(enc: string) {
   decipher.setAuthTag(buf.subarray(12, 28));
   return Buffer.concat([decipher.update(buf.subarray(28)), decipher.final()]).toString("utf8");
 }
+
+/** Token for one-click email unsubscribe links (doesn't expire). */
+export async function signUnsubscribe(userId: string) {
+  return createHmac("sha256", await serverSecret()).update(`unsub:${userId}`).digest("base64url");
+}
+
+export async function verifyUnsubscribe(userId: string, token: string | null) {
+  if (!token) return false;
+  const a = Buffer.from(await signUnsubscribe(userId));
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}

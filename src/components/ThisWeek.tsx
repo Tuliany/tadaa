@@ -43,7 +43,7 @@ export default function ThisWeek({ brandId }: { brandId: string }) {
       )}
       <ul className="mt-3 space-y-3">
         {shown.map((s) => (
-          <SlotCard key={s.id} slot={s} today={view!.today} brandId={brandId} onChange={update} onError={setError} />
+          <SlotCard key={s.id} slot={s} today={view!.today} brandId={brandId} autoPost={view!.autoPost} onChange={update} onError={setError} />
         ))}
       </ul>
     </div>

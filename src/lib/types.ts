@@ -36,6 +36,10 @@ export interface User {
   };
   /** Reels created: `trial` counts forever, `period` resets with each billing period. */
   usage?: { trial?: number; periodStart?: string; period?: number };
+  /** Email settings: the Monday "your week" email is on unless turned off. */
+  emails?: { weekly?: boolean };
+  /** Monday (YYYY-MM-DD) of the last week a weekly email was sent, so it's never sent twice. */
+  weeklySentFor?: string;
 }
 
 export interface Session {
@@ -77,7 +81,21 @@ export interface Brand {
   defaultReferenceId?: string;
   /** Idea Studio: weekdays to post on (1 = Monday … 7 = Sunday) and whether drafts are made automatically. */
   schedule?: { days: number[]; autoDraft: boolean; /** When the customer turned automatic drafts on themselves. */ autoDraftOnAt?: string };
+  /** Idea Studio: post approved Reels automatically on their day (the customer turns this on). */
+  autoPost?: AutoPost;
   createdAt: string;
+}
+
+/** Channels Idea Studio can post to by itself (TikTok needs the person to confirm each post). */
+export type AutoChannel = "instagram" | "facebook" | "linkedin";
+
+export interface AutoPost {
+  on: boolean;
+  /** When the customer turned it on. */
+  onAt?: string;
+  /** Local posting time, "HH:MM" in the brand's time zone. */
+  time: string;
+  channels: AutoChannel[];
 }
 
 /** One planned post in a brand's content calendar. */
@@ -102,6 +120,14 @@ export interface Slot {
   plannedFor?: string;
   /** Why an automatic draft wasn't made (e.g. out of Reels this month). */
   note?: string;
+  /** Automatic posting of this post's Reel. */
+  posting?: {
+    status: "posting" | "posted" | "failed";
+    at: string;
+    channels: AutoChannel[];
+    /** Channels that didn't work, with why (a post can go out on some channels and not others). */
+    errors?: string[];
+  };
   createdAt: string;
   updatedAt: string;
 }

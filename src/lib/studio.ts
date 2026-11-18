@@ -18,9 +18,14 @@ export const DRAFT_AHEAD_DAYS = 3;
 
 const ZONES: Record<string, string> = { sv: "Europe/Stockholm", es: "Europe/Madrid", de: "Europe/Berlin", fr: "Europe/Paris", en: "Europe/London" };
 
+/** The brand's time zone (from its language until brands have their own setting). */
+export function zoneOf(brand: Pick<Brand, "language">) {
+  return ZONES[brand.language] ?? "UTC";
+}
+
 /** Today's date (YYYY-MM-DD) where the brand is. */
 export function today(brand: Pick<Brand, "language">, at = new Date()) {
-  return new Intl.DateTimeFormat("sv-SE", { timeZone: ZONES[brand.language] ?? "UTC" }).format(at);
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: zoneOf(brand) }).format(at);
 }
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 /** 1 = Monday … 7 = Sunday */

@@ -2,7 +2,7 @@
  * Transactional email. Uses Resend when RESEND_API_KEY and TADAA_EMAIL_FROM are set;
  * otherwise writes the message to the server log so an admin can still act on it.
  */
-export async function sendEmail(to: string, subject: string, text: string) {
+export async function sendEmail(to: string, subject: string, text: string, extra: { html?: string; headers?: Record<string, string> } = {}) {
   const key = process.env.RESEND_API_KEY;
   const from = process.env.TADAA_EMAIL_FROM;
   if (!key || !from) {
@@ -12,7 +12,7 @@ export async function sendEmail(to: string, subject: string, text: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify({ from, to, subject, text }),
+    body: JSON.stringify({ from, to, subject, text, ...(extra.html ? { html: extra.html } : {}), ...(extra.headers ? { headers: extra.headers } : {}) }),
   });
   if (!res.ok) {
     console.error(`[email] Resend failed (${res.status}): ${await res.text()}`);
@@ -28,4 +28,9 @@ export function publicOrigin(req: Request) {
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const proto = req.headers.get("x-forwarded-proto") ?? "https";
   return host ? `${proto}://${host}` : new URL(req.url).origin;
+}
+
+/** Base URL for links in emails sent from background jobs (no request to read it from). */
+export function appOrigin() {
+  return (process.env.TADAA_PUBLIC_URL || "https://tadaaai.com").replace(/\/$/, "");
 }

@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/client";
 import { TEMPLATES } from "@/lib/templates";
-import type { Slot } from "@/lib/types";
+import type { AutoChannel, AutoPost, Slot } from "@/lib/types";
 
-export type CalendarSlot = Slot & { reel: { id: string; status: "draft" | "approved"; rendered: boolean; hook: string } | null };
+export type CalendarSlot = Slot & {
+  reel: { id: string; status: "draft" | "approved"; rendered: boolean; hook: string; links?: { provider: string; url: string }[] } | null;
+};
 export type CalendarView = {
   today: string;
   /** More ideas are being written in the background. */
@@ -14,8 +16,16 @@ export type CalendarView = {
   schedule: { days: number[]; autoDraft: boolean };
   autoDraftAvailable: boolean;
   draftAheadDays: number;
+  autoPost: AutoPost;
+  /** The brand's time zone, e.g. Europe/Stockholm. */
+  zone: string;
+  /** Connected channels for automatic posting (account name, or null). */
+  channels: Record<AutoChannel, string | null>;
   slots: CalendarSlot[];
 };
+
+export const CHANNEL_NAME: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", linkedin: "LinkedIn", tiktok: "TikTok" };
+const list = (cs: string[]) => cs.map((c) => CHANNEL_NAME[c] ?? c).join(", ");
 
 export function formatDate(date: string, today: string) {
   const d = new Date(`${date}T12:00:00Z`);
@@ -33,15 +43,20 @@ export function weekOf(date: string) {
 /** What state a calendar post is in, for the badge. */
 export function stateOf(s: CalendarSlot) {
   if (s.skipped) return { label: "Skipped", cls: "bg-black/5 text-ink/45" };
+  if (s.posting?.status === "posted") return { label: s.posting.errors?.length ? "Partly posted" : "Posted", cls: "bg-sky-100 text-sky-800" };
+  if (s.posting?.status === "posting") return { label: "Posting…", cls: "bg-sky-100 text-sky-800" };
+  if (s.posting?.status === "failed") return { label: "Not posted", cls: "bg-red-100 text-red-700" };
   if (s.reel?.status === "approved") return { label: "Approved", cls: "bg-emerald-100 text-emerald-800" };
   if (s.reel) return { label: "Needs review", cls: "bg-amber-100 text-amber-800" };
   return { label: "Idea", cls: "bg-cream text-ink/60" };
 }
 
-export function SlotCard({ slot, today, brandId, onChange, onError }: {
+export function SlotCard({ slot, today, brandId, autoPost, onChange, onError }: {
   slot: CalendarSlot;
   today: string;
   brandId: string;
+  /** The brand's automatic posting, to show when an approved Reel will go out. */
+  autoPost?: AutoPost;
   onChange: (s: CalendarSlot) => void;
   onError: (e: string) => void;
 }) {
@@ -53,7 +68,7 @@ export function SlotCard({ slot, today, brandId, onChange, onError }: {
     onError("");
     try {
       const next = await api<Slot>(`/api/slots/${slot.id}`, { method: "POST", json: { action, ...extra } });
-      onChange({ ...slot, ...next, reel: next.reelId ? (slot.reel?.id === next.reelId ? slot.reel : { id: next.reelId, status: "draft", rendered: false, hook: "" }) : null });
+      onChange({ ...slot, ...next, posting: next.posting, reel: next.reelId ? (slot.reel?.id === next.reelId ? slot.reel : { id: next.reelId, status: "draft", rendered: false, hook: "" }) : null });
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -90,6 +105,31 @@ export function SlotCard({ slot, today, brandId, onChange, onError }: {
       {!slot.reel && <p className="mt-1 text-sm text-ink/55">{slot.topic}</p>}
       {!slot.reel && slot.needsMedia && <p className="mt-1 text-xs text-ink/45">📷 {slot.needsMedia}</p>}
       {slot.note && !slot.reel && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{slot.note}</p>}
+      {slot.reel?.status === "approved" && !slot.posting && !slot.skipped && autoPost?.on && autoPost.channels.length > 0 && slot.date >= today && (
+        <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+          📤 Posts {slot.date === today ? "today" : "on its day"} at {autoPost.time} to {list(autoPost.channels)}
+        </p>
+      )}
+      {slot.reel?.status === "draft" && autoPost?.on && slot.date >= today && !slot.skipped && (
+        <p className="mt-2 text-xs text-ink/45">Approve it to have it posted at {autoPost.time} on its day.</p>
+      )}
+      {slot.posting?.status === "posted" && (
+        <p className="mt-2 text-xs text-sky-800">
+          Posted to {list(slot.posting.channels)}
+          {slot.reel?.links?.map((l) => (
+            <a key={l.url} href={l.url} target="_blank" rel="noreferrer" className="ml-2 font-semibold underline">
+              View on {CHANNEL_NAME[l.provider] ?? l.provider}
+            </a>
+          ))}
+        </p>
+      )}
+      {!!slot.posting?.errors?.length && (
+        <ul className="mt-2 space-y-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          {slot.posting.errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
         {slot.skipped ? (
@@ -103,8 +143,14 @@ export function SlotCard({ slot, today, brandId, onChange, onError }: {
               <button className="btn-primary px-3 py-1.5" disabled={!!busy} onClick={() => approve("approved")}>
                 {busy === "approve" ? "…" : "Approve"}
               </button>
+            ) : slot.posting?.status === "failed" && slot.date === today ? (
+              <button className="btn-primary px-3 py-1.5" disabled={!!busy} onClick={() => act("retryPost")}>
+                {busy === "retryPost" ? "…" : "Try posting again"}
+              </button>
             ) : (
-              <button className="text-ink/50 font-semibold" disabled={!!busy} onClick={() => approve("draft")}>Undo approve</button>
+              !slot.posting && (
+                <button className="text-ink/50 font-semibold" disabled={!!busy} onClick={() => approve("draft")}>Undo approve</button>
+              )
             )}
           </>
         ) : (

@@ -6,8 +6,18 @@ import { useCallback, useEffect, useState } from "react";
 import ErrorNote from "@/components/ErrorNote";
 import { SlotCard, weekOf, type CalendarSlot, type CalendarView } from "@/components/SlotCard";
 import { api } from "@/lib/client";
+import type { AutoChannel, AutoPost } from "@/lib/types";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const CHANNELS: { id: AutoChannel; name: string }[] = [
+  { id: "instagram", name: "Instagram" },
+  { id: "facebook", name: "Facebook" },
+  { id: "linkedin", name: "LinkedIn" },
+];
+const TIMES = Array.from({ length: 34 }, (_, i) => {
+  const m = 6 * 60 + i * 30; // 06:00 … 22:30
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 ? "30" : "00"}`;
+});
 
 export default function IdeaStudio() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +36,7 @@ export default function IdeaStudio() {
     return () => clearTimeout(t);
   }, [view, load]);
 
-  async function saveSchedule(next: { days?: number[]; autoDraft?: boolean }) {
+  async function saveSchedule(next: { days?: number[]; autoDraft?: boolean; autoPost?: Partial<AutoPost> }) {
     if (!view) return;
     setSaving(true);
     setError("");
@@ -103,6 +113,75 @@ export default function IdeaStudio() {
             </span>
           </span>
         </label>
+
+        <div className={`mt-5 border-t border-black/5 pt-5 text-sm ${view.autoDraftAvailable ? "" : "opacity-60"}`}>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={view.autoDraftAvailable && view.autoPost.on}
+              disabled={!view.autoDraftAvailable || saving || (!view.autoPost.on && !view.autoPost.channels.some((c) => view.channels[c]))}
+              onChange={(e) => saveSchedule({ autoPost: { on: e.target.checked } })}
+            />
+            <span>
+              <span className="font-semibold">Post approved Reels for me</span>
+              <span className="block text-ink/55">
+                {view.autoDraftAvailable
+                  ? "On each posting day, the Reels you've approved go out at the time you choose. Drafts you haven't approved are never posted."
+                  : <>On a paid plan we post your approved Reels on their day. <Link href="/pricing" className="font-semibold text-coral">See plans →</Link></>}
+              </span>
+            </span>
+          </label>
+          {view.autoDraftAvailable && (
+            <div className="mt-3 ml-7 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-ink/60">Post to</span>
+                {CHANNELS.map((c) => {
+                  const account = view.channels[c.id];
+                  const on = view.autoPost.channels.includes(c.id);
+                  return account ? (
+                    <button
+                      key={c.id}
+                      disabled={saving}
+                      title={account}
+                      onClick={() =>
+                        saveSchedule({
+                          autoPost: {
+                            channels: on ? view.autoPost.channels.filter((x) => x !== c.id) : [...view.autoPost.channels, c.id],
+                            // Removing the last channel turns automatic posting off.
+                            ...(on && view.autoPost.channels.length === 1 ? { on: false } : {}),
+                          },
+                        })
+                      }
+                      className={`rounded-full px-3 py-1 font-semibold ${on ? "bg-ink text-white" : "bg-black/5 text-ink/60 hover:bg-black/10"}`}
+                    >
+                      {c.name}
+                    </button>
+                  ) : (
+                    <Link key={c.id} href={`/brands/${id}/accounts`} className="rounded-full border border-dashed border-black/15 px-3 py-1 text-ink/45 hover:text-ink">
+                      Connect {c.name}
+                    </Link>
+                  );
+                })}
+              </div>
+              <label className="flex items-center gap-2">
+                <span className="text-ink/60">at</span>
+                <select
+                  className="input w-auto py-1"
+                  value={view.autoPost.time}
+                  disabled={saving}
+                  onChange={(e) => saveSchedule({ autoPost: { time: e.target.value } })}
+                >
+                  {(TIMES.includes(view.autoPost.time) ? TIMES : [view.autoPost.time, ...TIMES]).map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+                <span className="text-ink/45">{view.zone.split("/").pop()?.replace(/_/g, " ")} time</span>
+              </label>
+              <p className="text-xs text-ink/45">TikTok asks you to confirm every post, so TikTok posts are made from the Reel page.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <ErrorNote error={error} className="mt-4" />
@@ -114,7 +193,7 @@ export default function IdeaStudio() {
           </h2>
           <ul className="mt-3 grid gap-3 md:grid-cols-2">
             {slots.map((s) => (
-              <SlotCard key={s.id} slot={s} today={view.today} brandId={id} onChange={update} onError={setError} />
+              <SlotCard key={s.id} slot={s} today={view.today} brandId={id} autoPost={view.autoPost} onChange={update} onError={setError} />
             ))}
           </ul>
         </section>

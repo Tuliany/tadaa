@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ChangePassword from "@/components/ChangePassword";
+import EmailSettings from "@/components/EmailSettings";
 import { fetchBilling, goToStripe, type Billing } from "@/lib/billing-client";
 import { api } from "@/lib/client";
 
@@ -149,6 +150,7 @@ export default function Account() {
         </div>
       )}
 
+      <EmailSettings />
       <ChangePassword />
 
       <div className="card mt-6 p-6 border-red-200">

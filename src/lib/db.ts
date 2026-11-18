@@ -305,3 +305,8 @@ export function deleteSlot(id: string) {
 export async function listAllBrands() {
   return db().find<Brand>("brands");
 }
+
+/** Every user (for background jobs). */
+export async function listAllUsers() {
+  return db().find<User>("users");
+}
