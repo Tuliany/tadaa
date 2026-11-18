@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { handle, HttpError, requireUser } from "@/lib/auth";
+import { publicOrigin } from "@/lib/email";
 import { planOf } from "@/lib/plans";
 import { checkoutUrl, stripeConfigured, switchPlanUrl } from "@/lib/stripe";
 
@@ -9,7 +10,7 @@ export const POST = handle(async (req: Request) => {
   if (!stripeConfigured()) throw new HttpError(503, "Payments aren't switched on yet. Please try again soon.");
   const body = z.object({ plan: z.enum(["starter", "pro"]) }).safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw new HttpError(400, "Pick a plan.");
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const current = planOf(user);
   try {
     if (current === "starter" || current === "pro") return Response.json({ url: await switchPlanUrl(user, origin) });
