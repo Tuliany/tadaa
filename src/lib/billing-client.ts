@@ -21,8 +21,8 @@ export async function fetchBilling(): Promise<Billing | null> {
 }
 
 /** Sends the browser to Stripe (checkout, or the billing portal). */
-export async function goToStripe(path: "/api/billing/checkout" | "/api/billing/portal", plan?: "starter" | "pro") {
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(plan ? { plan } : {}) });
+export async function goToStripe(path: "/api/billing/checkout" | "/api/billing/portal", plan?: "starter" | "pro", flow?: "change" | "cancel") {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...(plan ? { plan } : {}), ...(flow ? { flow } : {}) }) });
   const data = (await r.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!r.ok || !data.url) throw new Error(data.error || "Couldn't open the payment page.");
   window.location.href = data.url;

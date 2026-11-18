@@ -20,27 +20,34 @@ export default function Account() {
   const [billing, setBilling] = useState<Billing | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
   const [justPaid, setJustPaid] = useState(false);
+  const [returned, setReturned] = useState<string | null>(null);
 
   useEffect(() => {
     api<Me>("/api/auth/me").then(setMe).catch(() => setMe(null));
-    const paid = new URLSearchParams(window.location.search).get("billing") === "success";
-    // Stripe tells us about the new subscription a moment after checkout, so check again a few times.
-    let tries = paid ? 8 : 1;
+    const param = new URLSearchParams(window.location.search).get("billing");
+    const paid = param === "success";
+    // Stripe tells us about changes a moment after they happen, so check again a few times.
+    let tries = param ? 6 : 1;
+    let first: string | null = null;
     const load = () =>
       fetchBilling()
         .then((b) => {
           setBilling(b);
           if (paid) setJustPaid(true);
-          if (paid && b && b.plan === "trial" && --tries > 0) setTimeout(load, 1500);
+          if (param === "updated" || param === "cancelled") setReturned(param);
+          const sig = b ? `${b.plan}:${b.cancelAtPeriodEnd}` : "";
+          first ??= sig;
+          const waiting = paid ? b?.plan === "trial" : param === "cancelled" ? !b?.cancelAtPeriodEnd : param === "updated" ? sig === first : false;
+          if (waiting && --tries > 0) setTimeout(load, 1500);
         })
         .catch(() => {});
     load();
   }, []);
 
-  async function manage() {
+  async function manage(flow?: "change" | "cancel") {
     setBillingBusy(true);
     try {
-      await goToStripe("/api/billing/portal");
+      await goToStripe("/api/billing/portal", undefined, flow);
     } catch (e) {
       setError((e as Error).message);
       setBillingBusy(false);
@@ -75,6 +82,10 @@ export default function Account() {
 
       {billing && (
         <div className="card mt-6 p-6">
+          {returned === "updated" && <p className="mb-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800">Your plan has been updated.</p>}
+          {returned === "cancelled" && (
+            <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Your plan is cancelled. You keep it until the date below.</p>
+          )}
           {justPaid && billing.plan !== "trial" && (
             <p className="mb-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800">Thank you! Your {billing.name} plan is active.</p>
           )}
@@ -87,8 +98,8 @@ export default function Account() {
               <p className="text-lg font-bold">{billing.name}</p>
             </div>
             {billing.plan === "starter" || billing.plan === "pro" ? (
-              <button className="btn-ghost" onClick={manage} disabled={billingBusy}>
-                {billingBusy ? "Opening…" : "Manage billing"}
+              <button className="btn-ghost" onClick={() => manage("change")} disabled={billingBusy}>
+                {billingBusy ? "Opening…" : "Change plan"}
               </button>
             ) : billing.plan === "trial" ? (
               <Link href="/pricing" className="btn-primary">See plans</Link>
@@ -113,8 +124,25 @@ export default function Account() {
               {billing.status === "past_due" && " · Payment failed – please update your card."}
             </p>
           )}
+          {(billing.plan === "starter" || billing.plan === "pro") && (
+            <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <button className="text-ink/60 underline hover:text-ink" onClick={() => manage()} disabled={billingBusy}>
+                Payment &amp; invoices
+              </button>
+              {!billing.cancelAtPeriodEnd && (
+                <button className="text-ink/60 underline hover:text-ink" onClick={() => manage("cancel")} disabled={billingBusy}>
+                  Cancel plan
+                </button>
+              )}
+              {billing.cancelAtPeriodEnd && (
+                <button className="text-ink/60 underline hover:text-ink" onClick={() => manage()} disabled={billingBusy}>
+                  Keep my plan (undo cancel)
+                </button>
+              )}
+            </div>
+          )}
           {billing.plan === "trial" && billing.hasCustomer && (
-            <button className="mt-3 text-sm text-ink/55 underline" onClick={manage} disabled={billingBusy}>
+            <button className="mt-3 text-sm text-ink/55 underline" onClick={() => manage()} disabled={billingBusy}>
               Invoices and payment details
             </button>
           )}

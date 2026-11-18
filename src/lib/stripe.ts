@@ -112,7 +112,8 @@ export async function checkoutUrl(user: User, plan: PaidPlanId, origin: string) 
 /** Our billing-portal settings (plan switching between Starter and Pro), created once and reused. */
 async function portalConfiguration() {
   const s = stripe();
-  const key = `stripePortalConfig:${process.env.STRIPE_SECRET_KEY!.slice(0, 12)}`;
+  // Bump the version when the settings below change, so a new configuration is made.
+  const key = `stripePortalConfig:v2:${process.env.STRIPE_SECRET_KEY!.slice(0, 12)}`;
   const saved = await getSetting<string>(key);
   if (saved) {
     const existing = await s.billingPortal.configurations.retrieve(saved).catch(() => null);
@@ -130,7 +131,8 @@ async function portalConfiguration() {
       subscription_update: {
         enabled: true,
         default_allowed_updates: ["price"],
-        proration_behavior: "create_prorations",
+        // Upgrades charge the difference right away (downgrades credit the next invoice).
+        proration_behavior: "always_invoice",
         products: items.map((p) => ({ product: typeof p.product === "string" ? p.product : p.product.id, prices: [p.id] })),
       },
     },
@@ -150,17 +152,24 @@ export async function portalUrl(user: User, origin: string) {
   return session.url;
 }
 
-/** Opens the portal straight on "change plan" for the user's subscription. */
-export async function switchPlanUrl(user: User, origin: string) {
+/** Opens the portal straight on "change plan" or "cancel", and comes back to the Account page when done. */
+export async function portalFlowUrl(user: User, origin: string, flow: "change" | "cancel") {
   if (!user.stripeCustomerId || !user.subscription) throw new Error("No subscription yet.");
+  const id = user.subscription.id;
+  const done = { type: "redirect" as const, redirect: { return_url: `${origin}/account?billing=${flow === "change" ? "updated" : "cancelled"}` } };
   const session = await stripe().billingPortal.sessions.create({
     customer: user.stripeCustomerId,
     return_url: `${origin}/account`,
     configuration: await portalConfiguration(),
-    flow_data: { type: "subscription_update", subscription_update: { subscription: user.subscription.id }, after_completion: { type: "redirect", redirect: { return_url: `${origin}/account?billing=updated` } } },
+    flow_data:
+      flow === "change"
+        ? { type: "subscription_update", subscription_update: { subscription: id }, after_completion: done }
+        : { type: "subscription_cancel", subscription_cancel: { subscription: id }, after_completion: done },
   });
   return session.url;
 }
+
+export const switchPlanUrl = (user: User, origin: string) => portalFlowUrl(user, origin, "change");
 
 /** Copies a Stripe subscription onto the user it belongs to. */
 export async function syncSubscription(sub: Stripe.Subscription) {
