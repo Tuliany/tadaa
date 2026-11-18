@@ -32,6 +32,8 @@ export default function IdeaStudio() {
     setError("");
     try {
       setView(await api<CalendarView>(`/api/brands/${id}/calendar`, { method: "PATCH", json: next }));
+      // Drafts that are already due are written right away: show them when they're ready.
+      if (next.autoDraft) for (const ms of [25_000, 60_000]) setTimeout(load, ms);
     } catch (e) {
       setError((e as Error).message);
     } finally {

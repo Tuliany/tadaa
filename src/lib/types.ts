@@ -76,7 +76,7 @@ export interface Brand {
   /** Last chosen reference look, pre-selected next time instead of defaultStyle. */
   defaultReferenceId?: string;
   /** Idea Studio: weekdays to post on (1 = Monday … 7 = Sunday) and whether drafts are made automatically. */
-  schedule?: { days: number[]; autoDraft: boolean };
+  schedule?: { days: number[]; autoDraft: boolean; /** When the customer turned automatic drafts on themselves. */ autoDraftOnAt?: string };
   createdAt: string;
 }
 

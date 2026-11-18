@@ -1,7 +1,7 @@
 import { handle, HttpError, requireBrand } from "@/lib/auth";
 import { listReels, saveSlot } from "@/lib/db";
 import { planOf } from "@/lib/plans";
-import { calendarNow, DRAFT_AHEAD_DAYS, scheduleOf, setSchedule, today } from "@/lib/studio";
+import { autoDraftBrand, calendarNow, DRAFT_AHEAD_DAYS, scheduleOf, setSchedule, today } from "@/lib/studio";
 import type { Brand, Slot } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -48,11 +48,16 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/brands/
   const days = Array.isArray(body.days) ? body.days.map(Number).filter((d) => Number.isInteger(d)) : current.days;
   if (!days.length) throw new HttpError(400, "Pick at least one posting day.");
   if (days.length > 7) throw new HttpError(400, "That's more days than a week has.");
+  const autoDraft = typeof body.autoDraft === "boolean" ? body.autoDraft : current.autoDraft;
+  const autoDraftOnAt = !autoDraft ? undefined : body.autoDraft === true ? new Date().toISOString() : brand.schedule?.autoDraftOnAt;
   let slots;
   try {
-    slots = await setSchedule(brand, { days, autoDraft: body.autoDraft ?? current.autoDraft });
+    slots = await setSchedule(brand, { days, autoDraft, autoDraftOnAt });
   } catch (e) {
     throw new HttpError(502, `Saved your posting days, but couldn't plan the new posts: ${(e as Error).message}. Reload to try again.`);
   }
-  return Response.json(await view({ ...brand, schedule: { days, autoDraft: body.autoDraft ?? current.autoDraft } }, slots, planOf(user)));
+  const next = { ...brand, schedule: { days, autoDraft, autoDraftOnAt } };
+  // Just turned on: make the drafts that are already due now rather than at the next run.
+  if (body.autoDraft === true) void autoDraftBrand(next).catch((e) => console.error("[studio] draft now", brand.id, e));
+  return Response.json(await view(next, slots, planOf(user)));
 });

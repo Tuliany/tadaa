@@ -8,7 +8,8 @@ import type { Brand, MediaItem, Slot, TemplateId } from "./types";
 
 /** Idea Studio: a content calendar per brand with ideas, drafts made ahead, and an approval queue. */
 
-export const DEFAULT_SCHEDULE = { days: [2, 5], autoDraft: true }; // Tuesday and Friday
+/** Tuesday and Friday. Automatic drafts are off until the customer turns them on (they use the plan's Reels). */
+export const DEFAULT_SCHEDULE = { days: [2, 5], autoDraft: false };
 export const PLAN_WEEKS = 4;
 /** At most this many posts are planned ahead (more appear as days pass). */
 export const MAX_PLANNED = 12;
@@ -26,7 +27,9 @@ const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T12:00:
 export const isoWeekday = (date: string) => ((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
 
 export function scheduleOf(brand: Brand) {
-  return brand.schedule ?? DEFAULT_SCHEDULE;
+  const s = brand.schedule ?? DEFAULT_SCHEDULE;
+  // Automatic drafts count only when the customer turned them on themselves.
+  return { ...s, autoDraft: !!(s.autoDraft && "autoDraftOnAt" in s && s.autoDraftOnAt) };
 }
 
 /** Posting dates from today for the next `weeks` weeks. */
@@ -139,10 +142,10 @@ async function fillCalendar(brand: Brand, limit = Infinity) {
 }
 
 /** Changes the posting days: unused future slots on dropped days are removed, new days get ideas. */
-export async function setSchedule(brand: Brand, schedule: { days: number[]; autoDraft: boolean }) {
+export async function setSchedule(brand: Brand, schedule: { days: number[]; autoDraft: boolean; autoDraftOnAt?: string }) {
   const days = [...new Set(schedule.days)].filter((d) => d >= 1 && d <= 7).sort();
   if (!days.length) throw new Error("Pick at least one day.");
-  const next = await saveBrand({ ...brand, schedule: { days, autoDraft: schedule.autoDraft } });
+  const next = await saveBrand({ ...brand, schedule: { days, autoDraft: schedule.autoDraft, autoDraftOnAt: schedule.autoDraft ? schedule.autoDraftOnAt : undefined } });
   const from = today(brand);
   for (const s of await listSlots(brand.id)) {
     if (s.date >= from && !s.reelId && !days.includes(isoWeekday(s.date))) await deleteSlot(s.id);
@@ -213,35 +216,46 @@ export async function autoDraftDue() {
   let made = 0;
   const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
   for (const brand of await listAllBrands()) {
-    if (!brand.ownerId) continue;
-    const owner = await getUser(brand.ownerId);
-    if (!owner) continue;
-    const plan = planOf(owner);
-    if (plan === "trial") {
-      // Keep the calendar planned ahead (so it opens instantly) for trial brands that are in use.
-      const active = (await listReels(brand.id)).some((r) => r.createdAt > monthAgo);
-      if (active) await ensureCalendar(brand).catch((e) => console.error("[studio] top-up", brand.id, e));
-      continue;
+    try {
+      made += await autoDraftBrand(brand, monthAgo);
+    } catch (e) {
+      console.error("[studio] brand", brand.id, e);
     }
-    const slots = await ensureCalendar(brand).catch(() => listSlots(brand.id));
-    if (!scheduleOf(brand).autoDraft) continue;
-    const from = today(brand);
-    const until = addDays(from, DRAFT_AHEAD_DAYS);
-    const due = slots.filter((s) => s.date >= from && s.date <= until && !s.reelId && !s.skipped && !s.note);
-    for (const slot of due) {
-      try {
-        await draftSlot(brand, owner, slot);
-        made++;
-      } catch (e) {
-        const note =
-          e instanceof PlanLimitError
-            ? `You've used this month's ${PLANS[plan].reels} Reels, so no draft was made. Make it yourself or upgrade.`
-            : e instanceof NoMediaError
-              ? e.message
-              : "Couldn't make this draft automatically. Click “Make draft” to try again.";
-        await saveSlot({ ...slot, note, updatedAt: new Date().toISOString() });
-        if (e instanceof PlanLimitError) break;
-      }
+  }
+  return made;
+}
+
+/** Tops up one brand's calendar and makes its due drafts (paid plans with automatic drafts on). */
+export async function autoDraftBrand(brand: Brand, activeSince = new Date(Date.now() - 30 * 86400_000).toISOString()) {
+  let made = 0;
+  if (!brand.ownerId) return 0;
+  const owner = await getUser(brand.ownerId);
+  if (!owner) return 0;
+  const plan = planOf(owner);
+  if (plan === "trial") {
+    // Keep the calendar planned ahead (so it opens instantly) for trial brands that are in use.
+    const active = (await listReels(brand.id)).some((r) => r.createdAt > activeSince);
+    if (active) await ensureCalendar(brand).catch((e) => console.error("[studio] top-up", brand.id, e));
+    return 0;
+  }
+  const slots = await ensureCalendar(brand).catch(() => listSlots(brand.id));
+  if (!scheduleOf(brand).autoDraft) return 0;
+  const from = today(brand);
+  const until = addDays(from, DRAFT_AHEAD_DAYS);
+  const due = slots.filter((s) => s.date >= from && s.date <= until && !s.reelId && !s.skipped && !s.note);
+  for (const slot of due) {
+    try {
+      await draftSlot(brand, owner, slot);
+      made++;
+    } catch (e) {
+      const note =
+        e instanceof PlanLimitError
+          ? `You've used this month's ${PLANS[plan].reels} Reels, so no draft was made. Make it yourself or upgrade.`
+          : e instanceof NoMediaError
+            ? e.message
+            : "Couldn't make this draft automatically. Click “Make draft” to try again.";
+      await saveSlot({ ...slot, note, updatedAt: new Date().toISOString() });
+      if (e instanceof PlanLimitError) break;
     }
   }
   return made;
