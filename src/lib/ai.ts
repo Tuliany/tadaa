@@ -17,11 +17,39 @@ function getClient() {
   return client;
 }
 
+/** Cuts text to `max` characters at a word boundary. */
+function cutWords(s: string, max: number) {
+  const cut = s.slice(0, max);
+  const at = cut.lastIndexOf(" ");
+  return (at > max * 0.6 ? cut.slice(0, at) : cut).replace(/[\s,;:–-]+$/, "");
+}
+/**
+ * Text with a length limit. Slightly long text is shortened instead of asking the AI again (a retry
+ * doubles the wait); text far over the limit (`slack` × max) is still sent back.
+ */
+const text = (max: number, slack = 1.3) =>
+  z.string().transform((v, ctx) => {
+    const s = v.trim();
+    if (s.length <= max) return s;
+    if (s.length <= max * slack) return cutWords(s, max);
+    ctx.addIssue({ code: "custom", message: `Too long: keep it under ${max} characters` });
+    return z.NEVER;
+  });
+/** A list with at most `max` items (extra items are dropped). */
+const upTo = <T extends z.ZodType>(item: T, max: number) => z.array(item).transform((a) => a.slice(0, max));
+
 /** Ask Claude for JSON and validate it. Retries once if the shape is wrong. */
-async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>, maxTokens = 2000): Promise<T> {
+async function askJson<T>(
+  system: string,
+  prompt: string,
+  schema: z.ZodType<T>,
+  maxTokens = 2000,
+  /** Skip the model's thinking step: about twice as fast, fine for light tasks like idea lists. */
+  quick = false,
+): Promise<T> {
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await getClient().messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: maxTokens,
       system: system + "\n\nRespond with a single JSON object only. No markdown fences, no commentary.",
@@ -31,7 +59,20 @@ async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>, 
           content: attempt === 0 ? prompt : `${prompt}\n\nYour previous answer was invalid: ${lastError}. Return valid JSON matching the schema.`,
         },
       ],
-    });
+    };
+    let res: Anthropic.Message;
+    try {
+      // "between_tools" turns thinking off on this model.
+      res = await getClient().messages.create(
+        quick ? { ...params, thinking: { type: "between_tools" } as unknown as Anthropic.MessageCreateParams["thinking"] } : params,
+      );
+    } catch (e) {
+      // A model that doesn't know this setting: ask again with its defaults.
+      if (!quick || !(e instanceof Anthropic.BadRequestError)) throw e;
+      quick = false;
+      res = await getClient().messages.create(params);
+    }
+    if (process.env.TADAA_AI_DEBUG) console.log("[ai] attempt", attempt, "usage", JSON.stringify(res.usage), "stop", res.stop_reason, "types", res.content.map((b) => b.type).join(","));
     const text = res.content
       .map((b) => (b.type === "text" ? b.text : ""))
       .join("")
@@ -44,6 +85,7 @@ async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>, 
     } catch (e) {
       lastError = (e as Error).message;
     }
+    if (process.env.TADAA_AI_DEBUG) console.log("[ai] invalid:", lastError, "\n---\n", text.slice(0, 600));
   }
   throw new Error(`AI returned invalid data: ${lastError}`);
 }
@@ -124,8 +166,8 @@ const brandSchema = z.object({
   description: z.string(),
   audience: z.string(),
   voice: z.string(),
-  offers: z.array(z.string()).max(8),
-  claimsToAvoid: z.array(z.string()).max(8),
+  offers: upTo(z.string(), 8),
+  claimsToAvoid: upTo(z.string(), 8),
   colors: z.object({
     primary: z.string(),
     secondary: z.string(),
@@ -192,14 +234,14 @@ function mockBrand(site: SiteInfo | null, opts: { name?: string; language: Langu
 // ---------- Reel scripts ----------
 
 const scriptSchema = z.object({
-  hook: z.string().max(90),
+  hook: text(90),
   slides: z
-    .array(z.object({ text: z.string().max(110), mediaIndex: z.number().int().nullable().optional() }))
+    .array(z.object({ text: text(110), mediaIndex: z.number().int().nullable().optional() }))
     .min(1)
-    .max(6),
-  cta: z.string().max(60),
-  caption: z.string().max(1200),
-  hashtags: z.array(z.string()).max(10),
+    .transform((a) => a.slice(0, 6)),
+  cta: text(60),
+  caption: text(1200, Infinity),
+  hashtags: upTo(z.string(), 10),
 });
 
 function brandBrief(brand: Brand) {
@@ -331,7 +373,7 @@ const planSchema = z.object({
       }),
     )
     .min(3)
-    .max(10),
+    .transform((a) => a.slice(0, 10)),
 });
 
 export async function generatePlan(brand: Brand, onPartial?: OnPartial): Promise<PlanIdea[]> {
@@ -469,7 +511,7 @@ Return JSON:
 
 // ---------- Meme captions ----------
 
-const memeSchema = z.object({ options: z.array(z.object({ caption: z.string().max(110), punchline: z.string().max(50) })).min(1).max(5) });
+const memeSchema = z.object({ options: z.array(z.object({ caption: text(110), punchline: text(50) })).min(1).transform((a) => a.slice(0, 5)) });
 
 /** Three caption ideas for a meme about the business (top caption + optional punchline). */
 export async function memeCaptions(brand: Brand, topic: string, clipHint: string): Promise<{ caption: string; punchline: string }[]> {
@@ -501,12 +543,12 @@ const calendarSchema = z.object({
     .array(
       z.object({
         date: z.string(),
-        title: z.string().max(80),
-        topic: z.string().max(400),
-        hook: z.string().max(80),
+        title: text(80, Infinity),
+        topic: text(400, Infinity),
+        hook: text(80, Infinity),
         template: z.enum(["showcase", "tips", "meme"]),
-        occasion: z.string().max(60).optional().nullable(),
-        needsMedia: z.string().max(160),
+        occasion: text(60, Infinity).optional().nullable(),
+        needsMedia: text(160, Infinity),
       }),
     )
     .min(1),
@@ -565,7 +607,9 @@ Mix formats across the dates (${templates}): showcase = highlight a product, ser
 
 Schema: { "ideas": [{ "date": "YYYY-MM-DD" (one of the dates above), "title": string (max 6 words, shown in the calendar), "topic": string (1-2 sentences: what the Reel says and the angle, written as a brief for the script writer), "hook": string (max 8 words, the opening line), "template": ${templates.split(" | ").map((t) => `"${t}"`).join(" | ")}, "occasion": string or null (the seasonal moment used, exactly as named above), "needsMedia": string (which of their photos or clips would suit it) }] }`,
     calendarSchema,
-    600 + dates.length * 350,
+    // Room for the model's own thinking plus the ideas, so the answer is never cut off.
+    2000 + dates.length * 500,
+    true,
   );
   // One idea per requested date, in order; fill gaps if the model skipped any.
   return dates.map((date, i) => {

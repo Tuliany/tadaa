@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { buildBrandProfile } from "@/lib/ai";
 import { handle, HttpError, requireUser } from "@/lib/auth";
 import { checkBrandAllowance, listBrands, saveBrand } from "@/lib/db";
+import { ensureCalendar } from "@/lib/studio";
 import { scrapeSiteCached, type SiteInfo } from "@/lib/scrape";
 import { ndjson, wantsStream } from "@/lib/stream";
 import { LANGUAGES, type Brand, type Language } from "@/lib/types";
@@ -56,6 +57,8 @@ export const POST = handle(async (req: Request) => {
       createdAt: new Date().toISOString(),
     };
     await saveBrand(brand);
+    // Start planning Idea Studio now, so the calendar is ready when they open it.
+    void ensureCalendar(brand).catch((e) => console.error("[studio] first plan", brand.id, e));
     return { brand, warning };
   };
   // The onboarding screen asks for a stream so the brand kit fills in as it's written.

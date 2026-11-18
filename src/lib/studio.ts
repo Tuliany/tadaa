@@ -64,9 +64,18 @@ const missingDates = (brand: Brand, slots: Slot[]) => {
   return upcomingDates(brand).filter((d) => !have.has(d));
 };
 
-/** Plans every missing posting date (waits for all of it). */
+/** Plans every missing posting date (waits for all of it), a few at a time so the page fills in steadily. */
 export function ensureCalendar(brand: Brand): Promise<Slot[]> {
-  return locked(brand, () => fillCalendar(brand));
+  return locked(brand, async () => {
+    let slots = await listSlots(brand.id);
+    for (let left = missingDates(brand, slots).length; left > 0; ) {
+      slots = await fillCalendar(brand, FIRST_BATCH);
+      const now = missingDates(brand, slots).length;
+      if (now >= left) break; // no progress; try again on the next run
+      left = now;
+    }
+    return slots;
+  });
 }
 
 /** How many posts are planned right away when someone is waiting; the rest are written in the background. */
@@ -78,9 +87,20 @@ const FIRST_BATCH = 4;
  */
 export async function calendarNow(brand: Brand): Promise<{ slots: Slot[]; planning: boolean }> {
   if (running.has(brand.id)) return { slots: await listSlots(brand.id), planning: true };
-  const missing = missingDates(brand, await listSlots(brand.id));
-  if (missing.length <= FIRST_BATCH) return { slots: await ensureCalendar(brand), planning: false };
-  await locked(brand, () => fillCalendar(brand, FIRST_BATCH));
+  const existing = await listSlots(brand.id);
+  const missing = missingDates(brand, existing);
+  if (!missing.length) return { slots: existing, planning: false };
+  try {
+    await locked(brand, () => fillCalendar(brand, FIRST_BATCH));
+  } catch (e) {
+    // Show what's already planned; the missing posts are tried again on the next visit or run.
+    if (existing.length) {
+      console.error("[studio] planning", brand.id, e);
+      return { slots: existing, planning: false };
+    }
+    throw e;
+  }
+  if (missing.length <= FIRST_BATCH) return { slots: await listSlots(brand.id), planning: false };
   void ensureCalendar(brand).catch((e) => console.error("[studio] planning", brand.id, e));
   return { slots: await listSlots(brand.id), planning: true };
 }
@@ -191,15 +211,22 @@ export async function draftSlot(brand: Brand, owner: { id: string }, slot: Slot)
  */
 export async function autoDraftDue() {
   let made = 0;
+  const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString();
   for (const brand of await listAllBrands()) {
-    if (!brand.schedule?.autoDraft || !brand.ownerId) continue;
+    if (!brand.ownerId) continue;
     const owner = await getUser(brand.ownerId);
     if (!owner) continue;
     const plan = planOf(owner);
-    if (plan === "trial") continue;
+    if (plan === "trial") {
+      // Keep the calendar planned ahead (so it opens instantly) for trial brands that are in use.
+      const active = (await listReels(brand.id)).some((r) => r.createdAt > monthAgo);
+      if (active) await ensureCalendar(brand).catch((e) => console.error("[studio] top-up", brand.id, e));
+      continue;
+    }
+    const slots = await ensureCalendar(brand).catch(() => listSlots(brand.id));
+    if (!scheduleOf(brand).autoDraft) continue;
     const from = today(brand);
     const until = addDays(from, DRAFT_AHEAD_DAYS);
-    const slots = await ensureCalendar(brand).catch(() => listSlots(brand.id));
     const due = slots.filter((s) => s.date >= from && s.date <= until && !s.reelId && !s.skipped && !s.note);
     for (const slot of due) {
       try {
