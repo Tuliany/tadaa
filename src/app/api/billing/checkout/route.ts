@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { handle, HttpError, requireUser } from "@/lib/auth";
 import { planOf } from "@/lib/plans";
-import { checkoutUrl, portalUrl, stripeConfigured } from "@/lib/stripe";
+import { checkoutUrl, stripeConfigured, switchPlanUrl } from "@/lib/stripe";
 
 /** Start a subscription in Stripe Checkout (or, if already subscribed, open the portal to switch plans). */
 export const POST = handle(async (req: Request) => {
@@ -12,7 +12,7 @@ export const POST = handle(async (req: Request) => {
   const origin = new URL(req.url).origin;
   const current = planOf(user);
   try {
-    if (current === "starter" || current === "pro") return Response.json({ url: await portalUrl(user, origin) });
+    if (current === "starter" || current === "pro") return Response.json({ url: await switchPlanUrl(user, origin) });
     return Response.json({ url: await checkoutUrl(user, body.data.plan, origin) });
   } catch (e) {
     console.error("[stripe] checkout failed:", e);

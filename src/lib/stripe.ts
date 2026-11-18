@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { getUserByStripeCustomer, updateUser } from "./db";
+import { getSetting, getUserByStripeCustomer, setSetting, updateUser } from "./db";
 import { PLANS } from "./plans";
 import type { PaidPlanId, User } from "./types";
 
@@ -109,36 +109,57 @@ export async function checkoutUrl(user: User, plan: PaidPlanId, origin: string) 
   return session.url!;
 }
 
+/** Our billing-portal settings (plan switching between Starter and Pro), created once and reused. */
+async function portalConfiguration() {
+  const s = stripe();
+  const key = `stripePortalConfig:${process.env.STRIPE_SECRET_KEY!.slice(0, 12)}`;
+  const saved = await getSetting<string>(key);
+  if (saved) {
+    const existing = await s.billingPortal.configurations.retrieve(saved).catch(() => null);
+    if (existing?.active) return existing.id;
+  }
+  const prices = await priceIds();
+  const items = await Promise.all(Object.values(prices).map((id) => s.prices.retrieve(id)));
+  const conf = await s.billingPortal.configurations.create({
+    business_profile: { headline: "Tadaa – manage your plan" },
+    features: {
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      customer_update: { enabled: true, allowed_updates: ["email", "address", "name"] },
+      subscription_cancel: { enabled: true, mode: "at_period_end" },
+      subscription_update: {
+        enabled: true,
+        default_allowed_updates: ["price"],
+        proration_behavior: "create_prorations",
+        products: items.map((p) => ({ product: typeof p.product === "string" ? p.product : p.product.id, prices: [p.id] })),
+      },
+    },
+  });
+  await setSetting(key, conf.id);
+  return conf.id;
+}
+
 /** Stripe's self-service page: change plan, card, cancel, invoices. */
 export async function portalUrl(user: User, origin: string) {
   if (!user.stripeCustomerId) throw new Error("No subscription yet.");
-  const s = stripe();
-  const create = (configuration?: string) =>
-    s.billingPortal.sessions.create({ customer: user.stripeCustomerId!, return_url: `${origin}/account`, ...(configuration ? { configuration } : {}) });
-  try {
-    return (await create()).url;
-  } catch (e) {
-    // No default portal configuration yet: create one that allows switching between our plans.
-    if (!/configuration/i.test((e as Error).message)) throw e;
-    const prices = await priceIds();
-    const products = await Promise.all(Object.values(prices).map((id) => s.prices.retrieve(id)));
-    const conf = await s.billingPortal.configurations.create({
-      business_profile: { headline: "Tadaa – manage your plan" },
-      features: {
-        invoice_history: { enabled: true },
-        payment_method_update: { enabled: true },
-        customer_update: { enabled: true, allowed_updates: ["email", "address", "tax_id", "name"] },
-        subscription_cancel: { enabled: true, mode: "at_period_end" },
-        subscription_update: {
-          enabled: true,
-          default_allowed_updates: ["price"],
-          proration_behavior: "create_prorations",
-          products: products.map((p) => ({ product: typeof p.product === "string" ? p.product : p.product.id, prices: [p.id] })),
-        },
-      },
-    });
-    return (await create(conf.id)).url;
-  }
+  const session = await stripe().billingPortal.sessions.create({
+    customer: user.stripeCustomerId,
+    return_url: `${origin}/account`,
+    configuration: await portalConfiguration(),
+  });
+  return session.url;
+}
+
+/** Opens the portal straight on "change plan" for the user's subscription. */
+export async function switchPlanUrl(user: User, origin: string) {
+  if (!user.stripeCustomerId || !user.subscription) throw new Error("No subscription yet.");
+  const session = await stripe().billingPortal.sessions.create({
+    customer: user.stripeCustomerId,
+    return_url: `${origin}/account`,
+    configuration: await portalConfiguration(),
+    flow_data: { type: "subscription_update", subscription_update: { subscription: user.subscription.id }, after_completion: { type: "redirect", redirect: { return_url: `${origin}/account?billing=updated` } } },
+  });
+  return session.url;
 }
 
 /** Copies a Stripe subscription onto the user it belongs to. */
