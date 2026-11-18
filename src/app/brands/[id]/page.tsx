@@ -4,47 +4,22 @@ import Link from "next/link";
 import ErrorNote from "@/components/ErrorNote";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, apiStream } from "@/lib/client";
+import { api } from "@/lib/client";
+import ThisWeek from "@/components/ThisWeek";
 import { TEMPLATES } from "@/lib/templates";
-import type { Brand, Plan, PlanIdea, Reel } from "@/lib/types";
-
-/** Ideas that are far enough along to show while the plan is still streaming. */
-function shownIdeas(partial: { ideas?: Partial<PlanIdea>[] }): PlanIdea[] {
-  return (partial.ideas ?? [])
-    .filter((i) => i && i.title && (i.template === "showcase" || i.template === "beforeAfter" || i.template === "tips"))
-    .map((i) => ({ title: i.title!, template: i.template!, hook: i.hook ?? "", needsMedia: i.needsMedia ?? "" }));
-}
+import type { Brand, Reel } from "@/lib/types";
 
 
 export default function BrandDashboard() {
   const { id } = useParams<{ id: string }>();
   const [brand, setBrand] = useState<Brand | null>(null);
   const [reels, setReels] = useState<Reel[]>([]);
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [planning, setPlanning] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     api<Brand>(`/api/brands/${id}`).then(setBrand).catch((e) => setError(e.message));
     api<Reel[]>(`/api/brands/${id}/reels`).then(setReels).catch(() => {});
-    api<Plan | null>(`/api/brands/${id}/plan`).then(setPlan).catch(() => {});
   }, [id]);
-
-  async function makePlan() {
-    setPlanning(true);
-    setError("");
-    try {
-      const draft = (p: { ideas?: Partial<PlanIdea>[] }) => {
-        const ideas = shownIdeas(p);
-        if (ideas.length) setPlan({ brandId: id, ideas, createdAt: new Date().toISOString() });
-      };
-      setPlan(await apiStream<Plan, { ideas?: Partial<PlanIdea>[] }>(`/api/brands/${id}/plan`, { method: "POST" }, draft));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setPlanning(false);
-    }
-  }
 
   if (!brand) return <p className="text-ink/50">{error || "Loading…"}</p>;
 
@@ -103,37 +78,7 @@ export default function BrandDashboard() {
         </section>
 
         <aside>
-          <div className="card p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-bold text-lg">This week&apos;s ideas</h2>
-              <button className="text-sm font-semibold text-coral disabled:opacity-50" onClick={makePlan} disabled={planning}>
-                {planning ? "Thinking…" : plan ? "Refresh" : "Generate"}
-              </button>
-            </div>
-            {!plan ? (
-              <p className="text-sm text-ink/60 mt-3">Get 7 Reel ideas tailored to {brand.name}, with what to film for each.</p>
-            ) : (
-              <ul className="mt-4 space-y-3">
-                {plan.ideas.map((idea, i) => (
-                  <li key={i} className="rounded-xl bg-cream p-3">
-                    <p className="text-sm font-bold">{idea.title}</p>
-                    <p className="text-sm text-ink/70">“{idea.hook}”</p>
-                    <p className="text-xs text-ink/45 mt-1">📷 {idea.needsMedia}</p>
-                    {planning ? (
-                      <span className="mt-2 inline-block text-xs text-ink/40">Writing…</span>
-                    ) : (
-                      <Link
-                        href={`/brands/${id}/new?template=${idea.template}&topic=${encodeURIComponent(`${idea.title}: ${idea.hook}`)}`}
-                        className="mt-2 inline-block text-xs font-bold text-coral"
-                      >
-                        Make this Reel →
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <ThisWeek brandId={id} />
         </aside>
       </div>
     </div>

@@ -9,4 +9,13 @@ export async function register() {
     console.error("[migrate] failed:", e);
     throw e;
   }
+
+  // Idea Studio: make the upcoming drafts for paid plans every 30 minutes.
+  const { autoDraftDue } = await import("./lib/studio");
+  const tick = () =>
+    autoDraftDue()
+      .then((n) => n && console.log(`[studio] made ${n} draft(s)`))
+      .catch((e) => console.error("[studio]", e));
+  setTimeout(tick, 60_000);
+  setInterval(tick, 30 * 60_000);
 }

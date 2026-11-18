@@ -91,6 +91,7 @@ function NewReel() {
           topic: topic.trim() || caption.trim(),
           template,
           mediaIds: selected,
+          ...(params.get("slot") ? { slotId: params.get("slot") } : {}),
           ...(style ? lookPayload(style) : {}),
           ...(isMeme ? { meme: { caption: caption.trim(), punchline: punchline.trim(), clipStart: clipRange.start, clipEnd: clipRange.end, sound } } : {}),
         },

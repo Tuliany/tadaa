@@ -75,7 +75,35 @@ export interface Brand {
   references?: ReferenceStyle[];
   /** Last chosen reference look, pre-selected next time instead of defaultStyle. */
   defaultReferenceId?: string;
+  /** Idea Studio: weekdays to post on (1 = Monday … 7 = Sunday) and whether drafts are made automatically. */
+  schedule?: { days: number[]; autoDraft: boolean };
   createdAt: string;
+}
+
+/** One planned post in a brand's content calendar. */
+export interface Slot {
+  id: string;
+  brandId: string;
+  /** YYYY-MM-DD (the brand's local posting day). */
+  date: string;
+  title: string;
+  /** Brief for the script writer: what the Reel is about and the angle. */
+  topic: string;
+  hook: string;
+  template: TemplateId;
+  /** A seasonal moment this idea plays on, e.g. "Midsommar". */
+  occasion?: string;
+  /** What photos or clips would suit it (shown to the owner). */
+  needsMedia?: string;
+  skipped?: boolean;
+  /** The draft Reel made for this slot. */
+  reelId?: string;
+  /** The posting date this idea was planned for, when it has been moved. */
+  plannedFor?: string;
+  /** Why an automatic draft wasn't made (e.g. out of Reels this month). */
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** A look learned from an uploaded reference video (the video itself is not kept). */

@@ -10,6 +10,7 @@ const NAV = [
   { href: "", label: "Dashboard", icon: "▦" },
   { href: "/first-reel", label: "First reel", icon: "🚀" },
   { section: "Create" },
+  { href: "/calendar", label: "Idea Studio", icon: "📅" },
   { href: "/new", label: "Create reel", icon: "✨" },
   { href: "/creations", label: "Creations", icon: "🎬" },
   { href: "/edit", label: "Brand Brain", icon: "🧠" },

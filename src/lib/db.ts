@@ -1,7 +1,7 @@
 import { PLANS, planOf, reelsUsed } from "./plans";
 import { deleteFile } from "./storage";
 import { keyOf, store, type Tx } from "./store";
-import type { Brand, MediaItem, OAuthClient, SocialConnection, SocialProvider, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
+import type { Slot, Brand, MediaItem, OAuthClient, SocialConnection, SocialProvider, OAuthCode, OAuthToken, PasswordReset, Plan, Reel, Session, User } from "./types";
 
 /**
  * Data access for the whole app. Backed by Postgres in production (DATABASE_URL)
@@ -75,7 +75,7 @@ export function deleteUserCascade(userId: string) {
     for (const b of brands) {
       uploads.push(...(await t.find<MediaItem>("media", { brandId: b.id })).map((m) => m.fileName));
       renders.push(...(await t.find<Reel>("reels", { brandId: b.id })).filter((r) => r.renderFile).map((r) => r.renderFile!));
-      for (const c of ["media", "reels", "plans", "connections"] as const) await t.del(c, { brandId: b.id });
+      for (const c of ["media", "reels", "plans", "connections", "slots"] as const) await t.del(c, { brandId: b.id });
       await t.del("brands", { id: b.id });
     }
     await t.del("users", { id: userId });
@@ -284,4 +284,24 @@ export async function checkBrandAllowance(user: User) {
         : `Your ${PLANS[plan].name} includes ${limit} brand. Upgrade to Pro for up to ${PLANS.pro.brands}.`,
     );
   }
+}
+
+// Idea Studio slots
+export async function listSlots(brandId: string) {
+  return (await db().find<Slot>("slots", { brandId })).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+}
+export async function getSlot(id: string) {
+  return db().get<Slot>("slots", { id });
+}
+export async function saveSlot(slot: Slot) {
+  await db().put("slots", slot.id, slot);
+  return slot;
+}
+export function deleteSlot(id: string) {
+  return db().del("slots", { id });
+}
+
+/** Every brand (for background jobs). */
+export async function listAllBrands() {
+  return db().find<Brand>("brands");
 }

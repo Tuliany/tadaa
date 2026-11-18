@@ -21,6 +21,7 @@ export const COLLECTIONS = [
   "oauthTokens",
   "connections",
   "settings",
+  "slots",
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 

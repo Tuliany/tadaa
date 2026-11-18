@@ -18,12 +18,12 @@ function getClient() {
 }
 
 /** Ask Claude for JSON and validate it. Retries once if the shape is wrong. */
-async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>): Promise<T> {
+async function askJson<T>(system: string, prompt: string, schema: z.ZodType<T>, maxTokens = 2000): Promise<T> {
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await getClient().messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: maxTokens,
       system: system + "\n\nRespond with a single JSON object only. No markdown fences, no commentary.",
       messages: [
         {
@@ -492,4 +492,85 @@ Schema: { "options": [{ "caption": string (max 16 words), "punchline": string (m
     memeSchema,
   );
   return res.options.slice(0, 3);
+}
+
+// ---------- Idea Studio ----------
+
+const calendarSchema = z.object({
+  ideas: z
+    .array(
+      z.object({
+        date: z.string(),
+        title: z.string().max(80),
+        topic: z.string().max(400),
+        hook: z.string().max(80),
+        template: z.enum(["showcase", "tips", "meme"]),
+        occasion: z.string().max(60).optional().nullable(),
+        needsMedia: z.string().max(160),
+      }),
+    )
+    .min(1),
+});
+export type CalendarIdea = z.infer<typeof calendarSchema>["ideas"][number];
+
+/**
+ * One Reel idea per planned date. Plays on nearby seasonal moments when they fit the business,
+ * mixes formats and avoids repeating recent topics.
+ */
+export async function calendarIdeas(
+  brand: Brand,
+  dates: string[],
+  occasions: { date: string; name: string }[],
+  recentTopics: string[],
+  canMeme: boolean,
+): Promise<CalendarIdea[]> {
+  return planIdeas(brand, dates, occasions, recentTopics, canMeme);
+}
+
+async function planIdeas(
+  brand: Brand,
+  dates: string[],
+  occasions: { date: string; name: string }[],
+  recentTopics: string[],
+  canMeme: boolean,
+): Promise<CalendarIdea[]> {
+  const templates = canMeme ? "showcase | tips | meme" : "showcase | tips";
+  if (!aiEnabled()) {
+    const fallback = [
+      { title: "Behind the scenes", topic: `A look behind the scenes at ${brand.name}`, hook: "A day at " + brand.name, template: "showcase" as const },
+      { title: "Customer tips", topic: `3 tips customers of ${brand.name} always ask about`, hook: "3 things to know", template: "tips" as const },
+      { title: "Best seller", topic: `Our most popular offer: ${brand.offers[0] ?? "what we do best"}`, hook: "Our most loved pick", template: "showcase" as const },
+    ];
+    return dates.map((date, i) => {
+      const occ = occasions.find((o) => Math.abs(Date.parse(o.date) - Date.parse(date)) <= 4 * 86400_000);
+      const f = fallback[i % fallback.length];
+      return occ
+        ? { date, title: occ.name, topic: `${occ.name} at ${brand.name}`, hook: `Ready for ${occ.name}?`, template: "showcase", occasion: occ.name, needsMedia: "2-4 photos" }
+        : { date, ...f, occasion: null, needsMedia: "2-4 photos of your work, space or products" };
+    });
+  }
+  const res = await askJson(
+    "You are the social media planner for a small business. You plan short vertical videos (Reels) that are easy to make from the photos and clips the business already has. Be concrete and specific to this business – never generic.",
+    `${brandBrief(brand)}
+
+Plan exactly one Reel idea for each of these posting dates: ${dates.join(", ")}.
+
+Seasonal moments in this period (use one when it is within a few days BEFORE the posting date and genuinely fits the business – people post ahead of the day, not after; otherwise ignore it):
+${occasions.length ? occasions.map((o) => `- ${o.date}: ${o.name}`).join("\n") : "- (none)"}
+
+Recently covered – do NOT repeat these topics:
+${recentTopics.length ? recentTopics.slice(0, 20).map((t) => `- ${t}`).join("\n") : "- (nothing yet)"}
+
+Mix formats across the dates (${templates}): showcase = highlight a product, service, place or result; tips = numbered tips that show expertise; ${canMeme ? "meme = a relatable, light-hearted caption over a short clip (at most one in four ideas); " : ""}vary the angle (offers, expertise, team/behind the scenes, customer questions, results, seasonal). Vary the wording of titles and hooks too – don't start several with the same words (e.g. "3 tips…").
+
+Schema: { "ideas": [{ "date": "YYYY-MM-DD" (one of the dates above), "title": string (max 6 words, shown in the calendar), "topic": string (1-2 sentences: what the Reel says and the angle, written as a brief for the script writer), "hook": string (max 8 words, the opening line), "template": ${templates.split(" | ").map((t) => `"${t}"`).join(" | ")}, "occasion": string or null (the seasonal moment used, exactly as named above), "needsMedia": string (which of their photos or clips would suit it) }] }`,
+    calendarSchema,
+    600 + dates.length * 350,
+  );
+  // One idea per requested date, in order; fill gaps if the model skipped any.
+  return dates.map((date, i) => {
+    const idea = res.ideas.find((x) => x.date === date) ?? res.ideas[i % res.ideas.length];
+    const template = idea.template === "meme" && !canMeme ? "showcase" : idea.template;
+    return { ...idea, date, template };
+  });
 }
