@@ -187,8 +187,9 @@ export async function syncSubscription(sub: Stripe.Subscription) {
       plan,
       status: sub.status,
       currentPeriodStart: new Date(item.current_period_start * 1000).toISOString(),
-      currentPeriodEnd: new Date(item.current_period_end * 1000).toISOString(),
-      cancelAtPeriodEnd: sub.cancel_at_period_end,
+      // When a cancellation is scheduled, access ends then (Stripe sets cancel_at; older flows set cancel_at_period_end).
+      currentPeriodEnd: new Date((sub.cancel_at ?? item.current_period_end) * 1000).toISOString(),
+      cancelAtPeriodEnd: sub.cancel_at_period_end || sub.cancel_at != null,
     },
   });
 }
