@@ -36,10 +36,12 @@ export default function HeaderNav() {
     );
   }
   return (
-    <nav className="flex items-center gap-5 text-sm font-medium text-ink/70">
+    <nav className="flex items-center gap-4 sm:gap-5 text-sm font-medium text-ink/70">
       <Link href="/brands" className="hover:text-ink">My brands</Link>
       <Link href="/pricing" className="hidden sm:inline hover:text-ink">Pricing</Link>
-      <Link href="/account" className="hidden sm:inline text-ink/40 hover:text-ink">{me.email}</Link>
+      <Link href="/account" className="hover:text-ink" title={me.email}>
+        Account
+      </Link>
       <button onClick={logout} className="hover:text-ink">Log out</button>
     </nav>
   );
