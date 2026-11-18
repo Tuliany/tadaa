@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Html5Audio,
   Img,
   OffthreadVideo,
   Sequence,
@@ -437,8 +438,35 @@ export const Reel: React.FC<ReelRenderProps> = (props) => (
   <AbsoluteFill>
     <ReelBody {...props} />
     {props.watermark && <Watermark />}
+    <Soundtrack audio={props.audio} />
   </AbsoluteFill>
 );
+
+/** Background music (looped, faded in and out) and sound effects at their moments. */
+function Soundtrack({ audio }: { audio: ReelRenderProps["audio"] }) {
+  const { durationInFrames } = useVideoConfig();
+  if (!audio) return null;
+  const music = audio.music;
+  return (
+    <>
+      {music && (
+        <Html5Audio
+          src={music.url}
+          loop
+          volume={(f) =>
+            music.volume *
+            interpolate(f, [0, 8, durationInFrames - 20, durationInFrames - 1], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })
+          }
+        />
+      )}
+      {audio.effects.map((e, i) => (
+        <Sequence key={i} from={e.from} durationInFrames={Math.max(1, durationInFrames - e.from)} layout="none">
+          <Html5Audio src={e.url} volume={e.volume} />
+        </Sequence>
+      ))}
+    </>
+  );
+}
 
 const ReelBody: React.FC<ReelRenderProps> = (props) => {
   const { script } = props;

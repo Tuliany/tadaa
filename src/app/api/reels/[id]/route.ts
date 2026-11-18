@@ -2,6 +2,8 @@ import { isStyleId } from "@/lib/styles";
 import { handle, requireReel } from "@/lib/auth";
 import { getBrand } from "@/lib/db";
 import { saveReel } from "@/lib/db";
+import { getStoredSound, strip } from "@/lib/sounds";
+import { soundMoments } from "@/lib/templates";
 import type { Reel, ReelScript } from "@/lib/types";
 
 export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[id]">) => {
@@ -36,6 +38,23 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
     }));
   }
   if (body.script && "sound" in body.script) body.script.sound = !!body.script.sound;
+
+  // Music and sound effects: only sounds imported into Tadaa (CC0); details come from our records.
+  const vol = (v: unknown, d: number) => (typeof v === "number" && isFinite(v) ? Math.min(Math.max(v, 0), 1) : d);
+  if (body.script && "music" in body.script) {
+    const m = body.script.music;
+    const stored = m?.id ? await getStoredSound(m.id) : null;
+    body.script.music = stored ? { ...strip(stored), volume: vol(m?.volume, 0.35) } : undefined;
+  }
+  if (body.script && "effects" in body.script) {
+    const valid = new Set(soundMoments({ ...reel.script, ...body.script, template: reel.script.template }).map((x) => x.at));
+    const out: NonNullable<ReelScript["effects"]> = [];
+    for (const e of (Array.isArray(body.script.effects) ? body.script.effects : []).slice(0, 12)) {
+      const stored = e?.sound?.id ? await getStoredSound(e.sound.id) : null;
+      if (stored && valid.has(String(e.at)) && !out.some((x) => x.at === e.at)) out.push({ at: String(e.at), sound: strip(stored), volume: vol(e.volume, 0.9) });
+    }
+    body.script.effects = out;
+  }
 
   const next: Reel = { ...reel, updatedAt: new Date().toISOString() };
   if (body.status === "approved" || body.status === "draft") next.status = body.status;

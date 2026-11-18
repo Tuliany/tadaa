@@ -72,3 +72,21 @@ export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styl
   const t = timing(script);
   return t.hook + script.slides.length * t.slide + t.cta;
 }
+
+/** Moments a sound effect can be placed at, with labels, for this Reel. */
+export function soundMoments(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template">): { at: string; label: string; frame: number }[] {
+  if (script.template === "meme") {
+    const clip = memeClipFrames(script);
+    return [
+      { at: "start", label: "Start", frame: 0 },
+      { at: "punch", label: "Punchline", frame: Math.max(0, clip - 40) },
+      { at: "end", label: "End card", frame: clip },
+    ];
+  }
+  const t = timing(script);
+  return [
+    { at: "hook", label: "Opening", frame: 0 },
+    ...script.slides.map((_, i) => ({ at: `s${i}`, label: `Slide ${i + 1}`, frame: t.hook + i * t.slide })),
+    { at: "cta", label: "End card", frame: t.hook + script.slides.length * t.slide },
+  ];
+}

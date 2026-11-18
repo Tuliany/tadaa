@@ -22,6 +22,7 @@ export const COLLECTIONS = [
   "connections",
   "settings",
   "slots",
+  "sounds",
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 

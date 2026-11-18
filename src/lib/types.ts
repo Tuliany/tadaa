@@ -181,6 +181,10 @@ export interface ReelScript {
   slides: Slide[];
   /** Keep the clips' own sound (Meme default); otherwise clips are muted. */
   sound?: boolean;
+  /** Background music (looped under the whole Reel). Volume 0–1. */
+  music?: SoundRef & { volume?: number };
+  /** Sound effects at moments of the Reel. */
+  effects?: { at: SoundMoment; sound: SoundRef; volume?: number }[];
   cta: string;
   caption: string;
   hashtags: string[];
@@ -283,7 +287,32 @@ export interface Plan {
 }
 
 /** Props passed to the Remotion composition (browser preview and MP4 render). */
+/** A sound effect or music track imported from Openverse (CC0 only: no credit needed, commercial use OK). */
+export interface SoundRef {
+  /** Openverse id */
+  id: string;
+  title: string;
+  creator?: string;
+  /** Always "cc0" today. */
+  license: string;
+  /** Seconds */
+  duration: number;
+  /** Where it came from (e.g. the Freesound page), for our records. */
+  pageUrl?: string;
+}
+
+export interface StoredSound extends SoundRef {
+  fileName: string;
+  mimeType: string;
+  importedAt: string;
+}
+
+/** Moments a sound effect can play at: "hook", "s0"…"s7" (slides), "cta"; memes: "start", "punch", "end". */
+export type SoundMoment = string;
+
 export interface ReelRenderProps {
+  /** Background music and sound effects, resolved to URLs and frames. */
+  audio?: { music?: { url: string; volume: number }; effects: { url: string; from: number; volume: number }[] };
   brand: Pick<Brand, "name" | "colors" | "logoUrl">;
   /** Free-trial Reels carry a small "Made with Tadaa" mark. */
   watermark?: boolean;

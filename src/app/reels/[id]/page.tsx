@@ -23,6 +23,7 @@ const ReelPlayer = dynamic(() => import("@/components/ReelPlayer"), {
 });
 
 const StylePicker = dynamic(() => import("@/components/StylePicker"), { ssr: false });
+const SoundPanel = dynamic(() => import("@/components/SoundPanel"), { ssr: false });
 
 export default function ReelPage() {
   const { id } = useParams<{ id: string }>();
@@ -212,6 +213,17 @@ export default function ReelPage() {
             {reel.status === "approved" && <p className="mt-2 text-xs text-ink/45">Changing the look moves the Reel back to draft so you can approve the new version.</p>}
           </div>
           )}
+
+          <SoundPanel
+            script={reel.script}
+            saving={busy === "save"}
+            onSave={(patch) =>
+              // null (not undefined) so "remove the music" survives JSON.
+              run("save", async () =>
+                setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, v ?? null])) } })),
+              )
+            }
+          />
 
           <div className="card p-5">
             <div className="flex items-center justify-between">
