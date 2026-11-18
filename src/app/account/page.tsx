@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import ChangePassword from "@/components/ChangePassword";
 import { fetchBilling, goToStripe, type Billing } from "@/lib/billing-client";
 import { api } from "@/lib/client";
 
@@ -119,6 +120,8 @@ export default function Account() {
           )}
         </div>
       )}
+
+      <ChangePassword />
 
       <div className="card mt-6 p-6 border-red-200">
         <h2 className="text-lg font-bold">Delete account</h2>
