@@ -110,9 +110,10 @@ export default function Privacy() {
 
       <h3>Connected social accounts (LinkedIn)</h3>
       <p>
-        If you connect LinkedIn, we receive your LinkedIn member id, name and profile picture and an access token (stored encrypted). We use them
-        only to show which profile is connected and to publish the videos you choose to post, with the text you write each time. We do not read
-        your connections, messages or other posts. You can disconnect at any time under Accounts, which revokes our access and deletes the token.
+        If you connect LinkedIn, we receive your LinkedIn member id, name and profile picture, the names of the company pages you can post for,
+        and an access token (stored encrypted). We use them only to show which profile or page is connected and to publish the videos you choose
+        to post – to your profile or the company page you pick – with the text you write each time. We do not read your connections, messages,
+        page followers or other posts. You can disconnect at any time under Accounts, which revokes our access and deletes the token.
       </p>
 
       <h2>7. How long we keep data</h2>

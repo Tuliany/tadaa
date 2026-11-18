@@ -11,6 +11,7 @@ interface LiConn {
   displayName?: string;
   avatarUrl?: string;
   expired: boolean;
+  postingAs?: { name: string; kind: "page" | "profile" } | null;
 }
 
 /** "Post to LinkedIn" – publishes the approved Reel to the connected member's profile. */
@@ -111,10 +112,19 @@ export default function LinkedInPost({ reel, onChange }: { reel: Reel; onChange:
           <div className="mt-3 space-y-4">
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={conn.avatarUrl || "/logos/linkedin.png"} alt="" className="h-8 w-8 rounded-full" />
+              <img
+                src={conn.postingAs?.kind === "page" ? "/logos/linkedin.png" : conn.avatarUrl || "/logos/linkedin.png"}
+                alt=""
+                className={`h-8 w-8 ${conn.postingAs?.kind === "page" ? "rounded-md" : "rounded-full"}`}
+              />
               <div>
-                <p className="font-semibold leading-tight">{conn.displayName}</p>
-                <p className="text-xs text-ink/50">Your LinkedIn profile · Anyone</p>
+                <p className="font-semibold leading-tight">{conn.postingAs?.name ?? conn.displayName}</p>
+                <p className="text-xs text-ink/50">
+                  {conn.postingAs?.kind === "page" ? "Company page" : "Your LinkedIn profile"} · Anyone ·{" "}
+                  <Link href={`/brands/${reel.brandId}/accounts`} className="underline">
+                    change
+                  </Link>
+                </p>
               </div>
             </div>
             <label className="block">

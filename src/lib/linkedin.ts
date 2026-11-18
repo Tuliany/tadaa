@@ -5,9 +5,11 @@ import { decrypt, encrypt } from "./oauth";
 import type { SocialConnection } from "./types";
 
 /**
- * LinkedIn: "Sign In with LinkedIn using OpenID Connect" + "Share on LinkedIn" (w_member_social).
- * Posts a video to the member's own profile: Videos API (initialize → upload parts → finalize) → Posts API.
- * Company pages need the Community Management API (w_organization_social), added later once approved.
+ * LinkedIn posting: Videos API (initialize → upload parts → finalize) → Posts API.
+ * Two apps are supported:
+ *  - "pages" (LINKEDIN_PAGES_CLIENT_ID/SECRET): Community Management API – posts to the member's profile
+ *    or to a company page they administer (w_organization_social). Preferred when configured.
+ *  - "member" (LINKEDIN_CLIENT_ID/SECRET): OpenID + Share on LinkedIn – the member's own profile only.
  */
 
 const AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
@@ -15,7 +17,16 @@ const TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 // LINKEDIN_API_BASE exists only for local testing against a mock server.
 const API = process.env.LINKEDIN_API_BASE || "https://api.linkedin.com";
 const VERSION = process.env.LINKEDIN_API_VERSION || "202610";
-export const LINKEDIN_SCOPES = ["openid", "profile", "w_member_social"];
+const MEMBER_SCOPES = ["openid", "profile", "w_member_social"];
+const PAGES_SCOPES = ["r_basicprofile", "w_member_social", "w_organization_social", "rw_organization_admin"];
+export const LINKEDIN_SCOPES = MEMBER_SCOPES;
+
+type App = "pages" | "member";
+const pagesApp = () => Boolean(process.env.LINKEDIN_PAGES_CLIENT_ID && process.env.LINKEDIN_PAGES_CLIENT_SECRET);
+/** The app new connections use. */
+export const currentApp = (): App => (pagesApp() ? "pages" : "member");
+/** True when Tadaa can post to company pages. */
+export const companyPagesEnabled = () => pagesApp();
 
 export class LinkedInError extends Error {
   constructor(
@@ -28,12 +39,12 @@ export class LinkedInError extends Error {
 }
 
 export function linkedinConfigured() {
-  return Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
+  return pagesApp() || Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
 }
 
-function creds() {
-  const id = process.env.LINKEDIN_CLIENT_ID;
-  const secret = process.env.LINKEDIN_CLIENT_SECRET;
+function creds(app: App = currentApp()) {
+  const id = app === "pages" ? process.env.LINKEDIN_PAGES_CLIENT_ID : process.env.LINKEDIN_CLIENT_ID;
+  const secret = app === "pages" ? process.env.LINKEDIN_PAGES_CLIENT_SECRET : process.env.LINKEDIN_CLIENT_SECRET;
   if (!id || !secret) throw new LinkedInError("LinkedIn isn't set up on this server yet.");
   return { id, secret };
 }
@@ -48,7 +59,7 @@ export function authorizeUrl(origin: string, state: string) {
   u.searchParams.set("client_id", creds().id);
   u.searchParams.set("redirect_uri", redirectUri(origin));
   u.searchParams.set("state", state);
-  u.searchParams.set("scope", LINKEDIN_SCOPES.join(" "));
+  u.searchParams.set("scope", (currentApp() === "pages" ? PAGES_SCOPES : MEMBER_SCOPES).join(" "));
   return u.toString();
 }
 
@@ -102,9 +113,13 @@ export async function saveLinkedInConnection(
   ownerId: string,
   t: { access_token: string; expires_in: number; refresh_token?: string; refresh_token_expires_in?: number; scope?: string },
 ) {
-  const { json: me } = await api<{ sub: string; name?: string; picture?: string }>("/v2/userinfo", t.access_token);
+  const app = currentApp();
+  const me = app === "pages" ? await basicProfile(t.access_token) : (await api<{ sub: string; name?: string; picture?: string }>("/v2/userinfo", t.access_token)).json;
+  const orgs = app === "pages" ? await companyPages(t.access_token).catch(() => []) : [];
   const now = Date.now();
   const existing = await getConnection(brandId, "linkedin");
+  // Keep the brand's choice if that page is still available; a single page is picked automatically.
+  const keep = existing?.selectedPageId && orgs.some((o) => o.id === existing.selectedPageId) ? existing.selectedPageId : undefined;
   const accessExpires = new Date(now + t.expires_in * 1000).toISOString();
   const conn: SocialConnection = {
     id: existing?.id ?? nanoid(10),
@@ -114,7 +129,10 @@ export async function saveLinkedInConnection(
     accountId: me.sub,
     displayName: me.name || "LinkedIn member",
     avatarUrl: me.picture,
-    scope: t.scope || LINKEDIN_SCOPES.join(","),
+    scope: t.scope || (app === "pages" ? PAGES_SCOPES : MEMBER_SCOPES).join(","),
+    liApp: app,
+    orgs,
+    selectedPageId: keep ?? (orgs.length === 1 ? orgs[0].id : undefined),
     accessTokenEnc: await encrypt(t.access_token),
     refreshTokenEnc: t.refresh_token ? await encrypt(t.refresh_token) : "",
     accessExpiresAt: accessExpires,
@@ -131,7 +149,7 @@ export async function accessToken(conn: SocialConnection) {
   if (!conn.refreshTokenEnc || Date.parse(conn.refreshExpiresAt) < Date.now()) {
     throw new LinkedInError("The LinkedIn connection has expired (LinkedIn asks every 60 days). Reconnect it under Accounts.", 401);
   }
-  const { id, secret } = creds();
+  const { id, secret } = creds(conn.liApp ?? "member");
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -153,13 +171,53 @@ export async function accessToken(conn: SocialConnection) {
 
 export async function revoke(conn: SocialConnection) {
   try {
-    const { id, secret } = creds();
+    const { id, secret } = creds(conn.liApp ?? "member");
     await fetch("https://www.linkedin.com/oauth/v2/revoke", {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: id, client_secret: secret, token: await decrypt(conn.accessTokenEnc) }),
     });
   } catch {}
+}
+
+/** Name and photo of the member (r_basicprofile; the Pages app has no OpenID). */
+async function basicProfile(token: string) {
+  const { json } = await api<{
+    id: string;
+    localizedFirstName?: string;
+    localizedLastName?: string;
+    profilePicture?: { "displayImage~"?: { elements?: { identifiers?: { identifier: string }[] }[] } };
+  }>("/v2/me?projection=(id,localizedFirstName,localizedLastName,profilePicture(displayImage~:playableStreams))", token);
+  const pics = json.profilePicture?.["displayImage~"]?.elements ?? [];
+  const picture = pics[pics.length - 1]?.identifiers?.[0]?.identifier;
+  return { sub: json.id, name: [json.localizedFirstName, json.localizedLastName].filter(Boolean).join(" ") || undefined, picture };
+}
+
+/** Company pages where the member can post (page admins and content admins). */
+export async function companyPages(token: string) {
+  const { json } = await api<{ elements?: { organization: string; role: string; state: string }[] }>(
+    "/rest/organizationAcls?q=roleAssignee&state=APPROVED&count=100",
+    token,
+  );
+  const ids = [
+    ...new Set(
+      (json.elements ?? [])
+        .filter((e) => ["ADMINISTRATOR", "CONTENT_ADMINISTRATOR", "DIRECT_SPONSORED_CONTENT_POSTER"].includes(e.role))
+        .map((e) => e.organization.split(":").pop()!)
+        .filter(Boolean),
+    ),
+  ].slice(0, 50);
+  const pages = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const { json: o } = await api<{ localizedName?: string; vanityName?: string }>(`/rest/organizations/${id}`, token);
+        return { id, name: o.localizedName || o.vanityName || `Company page ${id}` };
+      } catch {
+        return { id, name: `Company page ${id}` };
+      }
+    }),
+  );
+  return pages.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ---------- Publishing ----------
@@ -186,9 +244,17 @@ interface UploadInstruction {
   lastByte: number;
 }
 
+/** Who the post is published as: the selected company page, or the member's own profile. */
+export function authorOf(conn: SocialConnection) {
+  const org = conn.selectedPageId ? conn.orgs?.find((o) => o.id === conn.selectedPageId) : undefined;
+  return org
+    ? { urn: `urn:li:organization:${org.id}`, name: org.name, kind: "page" as const }
+    : { urn: `urn:li:person:${conn.accountId}`, name: conn.displayName, kind: "profile" as const };
+}
+
 /** Uploads the video and creates the post. Returns the post URN and video URN. */
 export async function publishVideo(conn: SocialConnection, token: string, file: string, text: string, title: string) {
-  const author = `urn:li:person:${conn.accountId}`;
+  const author = authorOf(conn).urn;
   const data = await fs.readFile(file);
   const { json: init } = await api<{ value: { video: string; uploadInstructions: UploadInstruction[]; uploadToken?: string } }>(
     "/rest/videos?action=initializeUpload",

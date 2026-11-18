@@ -2,7 +2,7 @@ import { z } from "zod";
 import { handle, HttpError, requireBrand } from "@/lib/auth";
 import { deleteConnection, getConnection, saveConnection } from "@/lib/db";
 import { instagramConfigured } from "@/lib/instagram";
-import { linkedinConfigured, revoke as revokeLinkedIn } from "@/lib/linkedin";
+import { authorOf, companyPagesEnabled, linkedinConfigured, revoke as revokeLinkedIn } from "@/lib/linkedin";
 import { metaConfigured, revoke as revokeMeta } from "@/lib/meta";
 import { decrypt } from "@/lib/oauth";
 import { revokeToken, tiktokConfigured } from "@/lib/tiktok";
@@ -51,15 +51,29 @@ export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/brands/[
       avatarUrl: li?.avatarUrl,
       expired: li ? Date.parse(li.accessExpiresAt) < Date.now() && Date.parse(li.refreshExpiresAt) < Date.now() : false,
       expiresAt: li?.accessExpiresAt,
+      // Company pages: available on the server, and whether this connection can use them.
+      pagesAvailable: companyPagesEnabled(),
+      canPostToPages: li?.liApp === "pages",
+      orgs: li?.orgs ?? [],
+      selectedPageId: li?.selectedPageId ?? null,
+      postingAs: li ? authorOf(li) : null,
     },
   });
 });
 
-/** Choose which Facebook Page (and its Instagram) this brand posts to. */
+/** Choose which Facebook Page / Instagram account / LinkedIn company page this brand posts to. */
 export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/brands/[id]/connections">) => {
   const { brand } = await requireBrand((await ctx.params).id);
-  const body = z.object({ provider: z.enum(["meta", "instagram"]), pageId: z.string() }).safeParse(await req.json().catch(() => ({})));
+  const body = z.object({ provider: z.enum(["meta", "instagram", "linkedin"]), pageId: z.string() }).safeParse(await req.json().catch(() => ({})));
   if (!body.success) throw new HttpError(400, "Choose an account");
+  if (body.data.provider === "linkedin") {
+    const conn = await getConnection(brand.id, "linkedin");
+    if (!conn) throw new HttpError(404, "LinkedIn isn't connected");
+    // "" = the member's own profile.
+    if (body.data.pageId && !conn.orgs?.some((o) => o.id === body.data.pageId)) throw new HttpError(404, "Company page not found");
+    await saveConnection({ ...conn, selectedPageId: body.data.pageId || undefined, updatedAt: new Date().toISOString() });
+    return Response.json({ ok: true });
+  }
   const conn = await getConnection(brand.id, body.data.provider);
   if (!conn?.pages?.some((p) => p.id === body.data.pageId)) throw new HttpError(404, "Account not found");
   await saveConnection({ ...conn, selectedPageId: body.data.pageId, updatedAt: new Date().toISOString() });

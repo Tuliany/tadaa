@@ -187,7 +187,11 @@ export interface SocialConnection {
   refreshExpiresAt: string;
   /** Meta only: the user's Pages and which one this brand posts to. */
   pages?: MetaPage[];
+  /** Meta: the selected Page. LinkedIn: the selected company page id (unset = the member's own profile). */
   selectedPageId?: string;
+  /** LinkedIn only: company pages the member may post for, and which app the token belongs to. */
+  orgs?: { id: string; name: string; logoUrl?: string }[];
+  liApp?: "pages" | "member";
   createdAt: string;
   updatedAt: string;
 }

@@ -224,6 +224,11 @@ interface LiState {
   avatarUrl?: string;
   expired: boolean;
   expiresAt?: string;
+  pagesAvailable: boolean;
+  canPostToPages: boolean;
+  orgs: { id: string; name: string }[];
+  selectedPageId: string | null;
+  postingAs: { name: string; kind: "page" | "profile" } | null;
 }
 
 function LinkedInCard() {
@@ -243,8 +248,15 @@ function LinkedInCard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  async function choose(pageId: string) {
+    setBusy(true);
+    await api(`/api/brands/${id}/connections`, { method: "PATCH", json: { provider: "linkedin", pageId } }).catch(() => {});
+    await load();
+    setBusy(false);
+  }
+
   async function disconnect() {
-    if (!confirm("Disconnect LinkedIn? Tadaa will no longer be able to post to this profile.")) return;
+    if (!confirm("Disconnect LinkedIn? Tadaa will no longer be able to post to LinkedIn for this brand.")) return;
     setBusy(true);
     await api(`/api/brands/${id}/connections?provider=linkedin`, { method: "DELETE" }).catch(() => {});
     await load();
@@ -260,7 +272,7 @@ function LinkedInCard() {
         <div className="min-w-0">
           <p className="font-bold text-lg">LinkedIn</p>
           <p className={`text-xs font-semibold truncate ${li?.connected && !li.expired ? "text-green-600" : "text-ink/40"}`}>
-            {li?.connected ? (li.expired ? "Connection expired – reconnect" : `Connected · ${li.displayName}`) : "Not connected"}
+            {li?.connected ? (li.expired ? "Connection expired – reconnect" : `Connected · ${li.postingAs?.name ?? li.displayName}`) : "Not connected"}
           </p>
         </div>
         {li?.connected && li.avatarUrl && (
@@ -268,8 +280,35 @@ function LinkedInCard() {
           <img src={li.avatarUrl} alt="" className="ml-auto h-9 w-9 rounded-full" />
         )}
       </div>
-      <p className="mt-3 text-sm text-ink/70">Post approved Reels to your LinkedIn profile. Company pages are coming soon.</p>
-      <p className="mt-1 text-xs text-ink/45">Needs: a LinkedIn account. LinkedIn asks you to reconnect every 60 days.</p>
+      <p className="mt-3 text-sm text-ink/70">
+        {li?.pagesAvailable ? "Post approved Reels to your company page or your own LinkedIn profile." : "Post approved Reels to your LinkedIn profile."}
+      </p>
+      <p className="mt-1 text-xs text-ink/45">
+        Needs: a LinkedIn account{li?.pagesAvailable ? " (and admin rights on the company page)" : ""}. LinkedIn asks you to reconnect every 60 days.
+      </p>
+      {li?.connected && !li.expired && li.canPostToPages && (
+        <label className="mt-3 block">
+          <span className="label">Post as</span>
+          <select className="input mt-1" value={li.selectedPageId ?? ""} onChange={(e) => choose(e.target.value)} disabled={busy}>
+            {li.orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name} (company page)
+              </option>
+            ))}
+            <option value="">{li.displayName} (your profile)</option>
+          </select>
+          {li.orgs.length === 0 && (
+            <span className="mt-1 block text-xs text-ink/50">
+              No company pages found. You need to be an admin of the page on LinkedIn, then click Reconnect.
+            </span>
+          )}
+        </label>
+      )}
+      {li?.connected && !li.expired && li.pagesAvailable && !li.canPostToPages && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Posting to company pages is now available. Click Reconnect and allow access to your pages.
+        </p>
+      )}
       {result === "connected" && <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">LinkedIn connected ✓</p>}
       {result === "partial" && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{message}</p>}
       {result === "error" && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">Couldn&apos;t connect LinkedIn: {message}</p>}
