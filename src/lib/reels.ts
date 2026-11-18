@@ -2,7 +2,9 @@ import { nanoid } from "nanoid";
 import { writeReelScript } from "./ai";
 import { countReel, refundReel, saveBrand, saveReel } from "./db";
 import { isStyleId, pickStyle } from "./styles";
-import { MEME_MAX_SECONDS } from "./templates";
+import { isClipTemplate, MEME_MAX_SECONDS, TALK_MAX_SECONDS } from "./templates";
+import { voiceEnabled } from "./elevenlabs";
+import { toTrack, voiceFromClip } from "./voice";
 import type { Brand, MediaItem, Reel, ReelScript, TemplateId, User } from "./types";
 
 const num = (v: unknown) => (typeof v === "number" && isFinite(v) && v >= 0 ? Math.round(v * 10) / 10 : undefined);
@@ -25,6 +27,17 @@ function applyMeme(script: ReelScript, meme: MemeInput, clip: MediaItem) {
   }
   script.slides = [slide];
   script.sound = m.sound !== false;
+}
+
+/** Talking video: the chosen part of the clip (up to a minute), always with its own sound. */
+function applyTalk(script: ReelScript, meme: MemeInput, clip: MediaItem) {
+  const m = clean(meme);
+  const start = Math.min(m.clipStart ?? 0, Math.max(0, (clip.duration ?? Infinity) - 0.5));
+  let end = m.clipEnd ?? (clip.duration ?? start + TALK_MAX_SECONDS);
+  if (clip.duration) end = Math.min(end, clip.duration);
+  if (end <= start) end = start + 1;
+  script.slides = [{ text: "", mediaId: clip.id, clipStart: start, clipEnd: Math.min(end, start + TALK_MAX_SECONDS) }];
+  script.sound = true;
 }
 
 export function clean(meme?: { caption?: string; punchline?: string; clipStart?: number; clipEnd?: number; sound?: boolean }) {
@@ -64,8 +77,19 @@ export async function createReel(opts: {
     // A look learned from a reference video, else a built-in look (else the brand's best match).
     const ref = opts.referenceId ? brand.references?.find((r) => r.id === opts.referenceId) : undefined;
     const style = ref ? ref.base : isStyleId(opts.style) ? opts.style : pickStyle(brand);
-    const written = await writeReelScript(brand, topic, template, media.slice(0, template === "meme" ? 1 : undefined));
+    const written = await writeReelScript(brand, topic, template, media.slice(0, isClipTemplate(template) ? 1 : undefined));
     if (template === "meme") applyMeme(written, opts.meme, media[0]);
+    if (template === "talk") {
+      applyTalk(written, opts.meme, media[0]);
+      // Captions from what's said in the video.
+      if (voiceEnabled()) {
+        try {
+          written.voice = toTrack(await voiceFromClip(brand, media[0]));
+        } catch (e) {
+          console.error("[reels] transcribing talking video", e);
+        }
+      }
+    }
     const script = { ...written, style, ...(ref ? { styleOverrides: ref.overrides, referenceId: ref.id } : {}) };
     if (opts.rememberLook) {
       // Remember the look so the next Reel starts with it.
@@ -80,7 +104,7 @@ export async function createReel(opts: {
       brandId: brand.id,
       topic,
       script,
-      mediaIds: (template === "meme" ? media.slice(0, 1) : media).map((m) => m.id),
+      mediaIds: (isClipTemplate(template) ? media.slice(0, 1) : media).map((m) => m.id),
       status: "draft",
       revisions: [],
       createdAt: now,

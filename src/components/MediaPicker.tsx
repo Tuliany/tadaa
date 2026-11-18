@@ -23,7 +23,7 @@ export default function MediaPicker({
 }) {
   const [library, setLibrary] = useState<MediaItem[]>([]);
   const [uploading, setUploading] = useState(false);
-  const single = template === "meme";
+  const single = template === "meme" || template === "talk";
   const add = (items: MediaItem[]) => {
     setLibrary((lib) => [...items, ...lib]);
     onChange(single ? items.slice(0, 1).map((i) => i.id) : [...selected, ...items.map((i) => i.id)]);

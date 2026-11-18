@@ -15,8 +15,8 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/reels/[i
   const media = reel.mediaIds.map((mid) => all.find((m) => m.id === mid)).filter((m) => !!m);
   try {
     const revised = await reviseReelScript(brand, reel.script, request.trim(), media);
-    // A text revision keeps the chosen music and sound effects.
-    const script = { ...revised, music: reel.script.music, effects: reel.script.effects };
+    // A text revision keeps the chosen music, sound effects and voice.
+    const script = { ...revised, music: reel.script.music, effects: reel.script.effects, voice: reel.script.voice };
     const now = new Date().toISOString();
     const next = {
       ...reel,

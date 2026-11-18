@@ -23,6 +23,7 @@ export const COLLECTIONS = [
   "settings",
   "slots",
   "sounds",
+  "voices",
 ] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 

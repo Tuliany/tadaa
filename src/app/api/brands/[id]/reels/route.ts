@@ -32,6 +32,7 @@ export const POST = handle(async (req: Request, ctx: RouteContext<"/api/brands/[
     throw new HttpError(400, "Before & After needs two photos: the before first, then the after.");
   }
   if (template === "meme" && !media.length) throw new HttpError(400, "A meme needs a clip.");
+  if (template === "talk" && media[0]?.kind !== "video") throw new HttpError(400, "A talking video needs a video.");
 
   try {
     const reel = await createReel({ brand, user, topic, template, media, style: body.style, referenceId: body.referenceId, meme: body.meme, rememberLook: true });

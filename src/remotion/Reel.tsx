@@ -10,10 +10,10 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import type { ReelRenderProps, Slide } from "../lib/types";
+import type { ReelRenderProps, Slide, VoiceWord } from "../lib/types";
 import { MEME_END_FRAMES, memeClipFrames, timing } from "../lib/templates";
 import { styleOf, type StyleSpec } from "../lib/styles";
-import { readableOn, textOn } from "../lib/color";
+import { contrastRatio, readableOn, textOn } from "../lib/color";
 import { FONTS } from "./fonts";
 
 // A missing or broken image must never cancel a whole render – just leave that layer empty.
@@ -200,8 +200,12 @@ function hookSize(len: number) {
   return len > 60 ? 76 : len > 35 ? 90 : 104;
 }
 
+/** Word-by-word captions replace the on-screen text while a voiceover plays. */
+const captionsOn = (props: ReelRenderProps) => !!props.script.voice?.captions && !!props.script.voice.words.length && props.script.voice.source !== "clip";
+
 function Hook({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
   const { brand, script, media } = props;
+  const hideText = captionsOn(props);
   const first = media.find((m) => m.id === script.slides[0]?.mediaId) ?? media[0];
   const bg = s.framed ? "#f6f3ee" : `linear-gradient(200deg, ${brand.colors.secondary} 0%, ${brand.colors.background} 75%)`;
   const onPhoto = !!first && !s.framed;
@@ -209,7 +213,7 @@ function Hook({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
     <AbsoluteFill style={{ background: bg }}>
       <MediaLayer media={first} s={s} reverse boost={0.05} />
       {first && <Shade s={s} extra={0.1} />}
-      <AbsoluteFill style={placementStyle(s, true)}>
+      <AbsoluteFill style={{ ...placementStyle(s, true), display: hideText ? "none" : undefined }}>
         <StyledText
           s={s}
           size={Math.round(hookSize(script.hook.length) * Math.min(s.size, 1.25))}
@@ -241,7 +245,7 @@ function SlideCard({ slide, index, props, s }: { slide: Slide; index: number; pr
       <AbsoluteFill style={{ backgroundColor: bg }}>
         <MediaLayer media={m} s={s} reverse={index % 2 === 1} clipStart={slide.clipStart} sound={!!script.sound} />
         {m && <Shade s={s} extra={classic && isTips ? 0.2 : 0} />}
-        <AbsoluteFill style={place as React.CSSProperties}>
+        <AbsoluteFill style={{ ...(place as React.CSSProperties), display: captionsOn(props) ? "none" : undefined }}>
           <StyledText s={s} size={size} color={color} accent={brand.colors.primary} delay={s.transition === "slide" ? 6 : 0} forceShadow={classic && !onPill}>
             {slide.text}
           </StyledText>
@@ -281,7 +285,10 @@ function BeforeAfter({ props, s, slideFrames }: { props: ReelRenderProps; s: Sty
       {text}
     </div>
   );
-  const textPlace = placementStyle({ ...full, placement: s.placement === "top" ? "top" : s.placement === "lowerThird" ? "lowerThird" : "bottom" });
+  const textPlace: React.CSSProperties = {
+    ...placementStyle({ ...full, placement: s.placement === "top" ? "top" : s.placement === "lowerThird" ? "lowerThird" : "bottom" }),
+    display: captionsOn(props) ? "none" : undefined,
+  };
   return (
     <AbsoluteFill style={{ backgroundColor: brand.colors.primary }}>
       <MediaLayer media={before} s={full} />
@@ -437,10 +444,104 @@ function Watermark() {
 export const Reel: React.FC<ReelRenderProps> = (props) => (
   <AbsoluteFill>
     <ReelBody {...props} />
+    {captionsOn(props) && (
+      <Sequence durationInFrames={Math.ceil((props.script.voice!.duration + 0.5) * 30)} layout="none">
+        <Captions words={props.script.voice!.words} s={styleOf(props.script)} accent={props.brand.colors.primary} bottom={300} />
+      </Sequence>
+    )}
     {props.watermark && <Watermark />}
     <Soundtrack audio={props.audio} />
   </AbsoluteFill>
 );
+
+/** Groups words into short caption lines (max 3 words, new line at pauses and sentence ends). */
+function captionGroups(words: VoiceWord[]) {
+  const groups: VoiceWord[][] = [];
+  let cur: VoiceWord[] = [];
+  words.forEach((w, i) => {
+    const prev = words[i - 1];
+    if (cur.length && (cur.length >= 3 || (prev && w.start - prev.end > 0.45) || /[.!?…]$/.test(prev?.text ?? ""))) {
+      groups.push(cur);
+      cur = [];
+    }
+    cur.push(w);
+  });
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+/** Captions that follow the voice: the current line, with the word being said highlighted. `offset` shifts word times (seconds). */
+function Captions({ words, s, accent, bottom, offset = 0 }: { words: VoiceWord[]; s: StyleSpec; accent: string; bottom: number; offset?: number }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const groups = React.useMemo(() => captionGroups(words), [words]);
+  const t = frame / fps + offset;
+  const gi = groups.findIndex((g, i) => t >= g[0].start - 0.05 && (i === groups.length - 1 ? t <= g[g.length - 1].end + 0.6 : t < groups[i + 1][0].start - 0.05));
+  if (gi < 0) return null;
+  const g = groups[gi];
+  const enter = interpolate(t - g[0].start, [-0.05, 0.12], [0.85, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const size = g.reduce((n, w) => n + w.text.length, 0) > 22 ? 70 : 84;
+  // The word being said: the brand colour when it stands out against the black outline, else yellow.
+  const hi = contrastRatio(accent, "#000000") >= 5 ? accent : "#ffd93b";
+  return (
+    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: `0 70px ${bottom}px`, pointerEvents: "none" }}>
+      <div
+        style={{
+          fontFamily: fontOf(s),
+          fontWeight: Math.max(s.weight, 800),
+          fontSize: size,
+          lineHeight: 1.15,
+          textAlign: "center",
+          maxWidth: 940,
+          transform: `scale(${enter})`,
+          color: "#fff",
+          WebkitTextStroke: `${Math.round(size / 13)}px #000`,
+          paintOrder: "stroke fill",
+          textShadow: "0 6px 0 rgba(0,0,0,0.35)",
+        }}
+      >
+        {g.map((w, i) => {
+          const active = t >= w.start && (i === g.length - 1 || t < g[i + 1].start);
+          return (
+            <React.Fragment key={i}>
+              {i > 0 && " "}
+              <span style={{ color: active ? hi : "#fff" }}>
+                {s.upper ? w.text.toUpperCase() : w.text}
+              </span>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+/** Talking video: the clip full screen with its own sound, a short title at the top, captions from the speech. */
+function Talk({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; clipFrames: number }) {
+  const frame = useCurrentFrame();
+  const { brand, script, media } = props;
+  const slide = script.slides[0];
+  const clip = media.find((m) => m.id === slide?.mediaId) ?? media[0];
+  const titleOut = interpolate(frame, [90, 105], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const still = { ...s, motion: 0, framed: false };
+  const voice = script.voice;
+  return (
+    <AbsoluteFill style={{ background: "#000" }}>
+      <MediaLayer media={clip} s={still} clipStart={slide?.clipStart ?? 0} sound />
+      <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.35) 100%)" }} />
+      {script.hook && frame < 110 && (
+        <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", padding: "200px 70px 0", opacity: titleOut }}>
+          <StyledText s={{ ...s, treatment: "pill", wordByWord: false }} size={64} color="#ffffff" accent={brand.colors.primary}>
+            {script.hook}
+          </StyledText>
+        </AbsoluteFill>
+      )}
+      {voice?.captions && voice.words.length > 0 && frame < clipFrames && (
+        <Captions words={voice.words} s={s} accent={brand.colors.primary} bottom={380} offset={slide?.clipStart ?? 0} />
+      )}
+    </AbsoluteFill>
+  );
+}
 
 /** Background music (looped, faded in and out) and sound effects at their moments. */
 function Soundtrack({ audio }: { audio: ReelRenderProps["audio"] }) {
@@ -449,6 +550,7 @@ function Soundtrack({ audio }: { audio: ReelRenderProps["audio"] }) {
   const music = audio.music;
   return (
     <>
+      {audio.voice && <Html5Audio src={audio.voice.url} volume={audio.voice.volume} />}
       {music && (
         <Html5Audio
           src={music.url}
@@ -471,6 +573,19 @@ function Soundtrack({ audio }: { audio: ReelRenderProps["audio"] }) {
 const ReelBody: React.FC<ReelRenderProps> = (props) => {
   const { script } = props;
   const s = styleOf(script);
+  if (script.template === "talk") {
+    const clipFrames = memeClipFrames(script);
+    return (
+      <AbsoluteFill style={{ backgroundColor: "#000" }}>
+        <Sequence durationInFrames={clipFrames}>
+          <Talk props={props} s={s} clipFrames={clipFrames} />
+        </Sequence>
+        <Sequence from={clipFrames} durationInFrames={MEME_END_FRAMES}>
+          <EndCard props={props} s={s} />
+        </Sequence>
+      </AbsoluteFill>
+    );
+  }
   if (script.template === "meme") {
     const clipFrames = memeClipFrames(script);
     return (

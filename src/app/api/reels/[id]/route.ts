@@ -17,8 +17,10 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
   const body = (await req.json()) as { status?: Reel["status"]; script?: Partial<ReelScript> };
   if (body.script) {
     // Look tweaks only ever come from the brand's saved references, never straight from the client.
-    const { styleOverrides: _ignored, referenceId, ...rest } = body.script;
+    // Voices are only set through /voice (recorded, AI or transcribed on the server).
+    const { styleOverrides: _ignored, referenceId, voice: _voice, ...rest } = body.script;
     void _ignored;
+    void _voice;
     body.script = rest;
     if (referenceId) {
       const ref = (await getBrand(reel.brandId))?.references?.find((r) => r.id === referenceId);

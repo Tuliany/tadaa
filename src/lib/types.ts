@@ -158,7 +158,7 @@ export interface MediaItem {
   createdAt: string;
 }
 
-export type TemplateId = "showcase" | "beforeAfter" | "tips" | "meme";
+export type TemplateId = "showcase" | "beforeAfter" | "tips" | "meme" | "talk";
 
 export interface Slide {
   text: string;
@@ -185,6 +185,8 @@ export interface ReelScript {
   music?: SoundRef & { volume?: number };
   /** Sound effects at moments of the Reel. */
   effects?: { at: SoundMoment; sound: SoundRef; volume?: number }[];
+  /** Spoken voice: a recorded or uploaded voiceover, an AI voice, or (Talking video) the clip's own speech. */
+  voice?: VoiceTrack;
   cta: string;
   caption: string;
   hashtags: string[];
@@ -307,12 +309,52 @@ export interface StoredSound extends SoundRef {
   importedAt: string;
 }
 
+/** One spoken word with its timing (seconds from the start of the voice audio, or of the clip for Talking video). */
+export interface VoiceWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface VoiceTrack {
+  /** Id in the "voices" collection. */
+  id: string;
+  source: "recorded" | "ai" | "clip";
+  text: string;
+  words: VoiceWord[];
+  /** Seconds */
+  duration: number;
+  /** Show word-by-word captions (replaces the slide text while the voice plays). */
+  captions: boolean;
+  /** AI voice name, for display. */
+  voiceName?: string;
+}
+
+/** A voice recording, AI voice or clip transcript, owned by a brand. */
+export interface StoredVoice extends Omit<VoiceTrack, "captions"> {
+  brandId: string;
+  /** Audio file in storage (recorded / AI). Talking video uses the clip's own audio instead. */
+  fileName?: string;
+  mimeType?: string;
+  /** Talking video: the clip that was transcribed. */
+  mediaId?: string;
+  /** ElevenLabs voice id (AI voice). */
+  voiceId?: string;
+  language?: string;
+  createdAt: string;
+}
+
 /** Moments a sound effect can play at: "hook", "s0"…"s7" (slides), "cta"; memes: "start", "punch", "end". */
 export type SoundMoment = string;
 
 export interface ReelRenderProps {
   /** Background music and sound effects, resolved to URLs and frames. */
-  audio?: { music?: { url: string; volume: number }; effects: { url: string; from: number; volume: number }[] };
+  audio?: {
+    music?: { url: string; volume: number };
+    effects: { url: string; from: number; volume: number }[];
+    /** Recorded / AI voiceover, from the start of the Reel. */
+    voice?: { url: string; volume: number };
+  };
   brand: Pick<Brand, "name" | "colors" | "logoUrl">;
   /** Free-trial Reels carry a small "Made with Tadaa" mark. */
   watermark?: boolean;

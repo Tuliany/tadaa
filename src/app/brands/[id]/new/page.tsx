@@ -10,7 +10,7 @@ import { pickStyle } from "@/lib/styles";
 import { initialLook, lookPayload, type LookValue } from "@/lib/looks";
 import { api } from "@/lib/client";
 import { mediaUrl } from "@/lib/props";
-import { TEMPLATES } from "@/lib/templates";
+import { TALK_MAX_SECONDS, TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, TemplateId } from "@/lib/types";
 
 function NewReel() {
@@ -33,6 +33,7 @@ function NewReel() {
   const [ideasBusy, setIdeasBusy] = useState(false);
   const [sound, setSound] = useState(true);
   const isMeme = template === "meme";
+  const isTalk = template === "talk";
 
   useEffect(() => {
     api<Brand>(`/api/brands/${id}`)
@@ -56,11 +57,12 @@ function NewReel() {
     return picked.length ? picked : library.filter((m) => m.kind === "image").slice(0, 3);
   }, [selected, library]);
   const recommended = brand ? pickStyle(brand) : "bold";
-  const clip = isMeme ? library.find((m) => m.id === selected[0]) : undefined;
+  const clip = isMeme || isTalk ? library.find((m) => m.id === selected[0]) : undefined;
   const clipId = clip?.id;
 
   // A new clip starts at its beginning.
-  const clipRange = range.id === clipId ? range : { start: 0 };
+  const clipRange =
+    range.id === clipId ? range : isTalk ? { start: 0, end: Math.min(clip?.duration ?? TALK_MAX_SECONDS, TALK_MAX_SECONDS) } : { start: 0 };
   const setClipRange = (r: { start: number; end?: number }) => setRange({ ...r, id: clipId });
 
   async function suggestCaptions() {
@@ -88,12 +90,13 @@ function NewReel() {
     setError("");
     try {
       const reel = await api<Reel>(`/api/brands/${id}/reels`, { method: "POST", json: {
-          topic: topic.trim() || caption.trim(),
+          topic: topic.trim() || caption.trim() || (isTalk ? "A talking video" : ""),
           template,
           mediaIds: selected,
           ...(params.get("slot") ? { slotId: params.get("slot") } : {}),
           ...(style ? lookPayload(style) : {}),
           ...(isMeme ? { meme: { caption: caption.trim(), punchline: punchline.trim(), clipStart: clipRange.start, clipEnd: clipRange.end, sound } } : {}),
+          ...(isTalk ? { meme: { clipStart: clipRange.start, clipEnd: clipRange.end, sound: true } } : {}),
         },
       });
       router.push(`/reels/${reel.id}`);
@@ -105,6 +108,7 @@ function NewReel() {
 
   const needsTwo = template === "beforeAfter" && selected.length < 2;
   const memeMissing = isMeme && (!selected.length || !caption.trim());
+  const talkMissing = isTalk && clip?.kind !== "video";
 
   return (
     <div>
@@ -128,7 +132,7 @@ function NewReel() {
       </section>
 
       <section className="mt-8">
-        <h2 className="label">2 · What is it about?{isMeme ? " (optional)" : ""}</h2>
+        <h2 className="label">2 · What is it about?{isMeme || isTalk ? " (optional)" : ""}</h2>
         <input
           className="input text-base"
           placeholder={
@@ -144,13 +148,34 @@ function NewReel() {
       <section className="mt-8">
         <h2 className="label">
           3 ·{" "}
-          {isMeme
+          {isTalk
+            ? "Your video (you or your team talking to the camera)"
+            : isMeme
             ? "Your clip (your own, or find a licence-free one)"
             : `Photos & clips ${template === "beforeAfter" ? "(tap the BEFORE first, then the AFTER)" : "(in the order you want them)"}`}
         </h2>
         <MediaPicker brandId={id} template={template} selected={selected} onChange={setSelected} onError={setError} />
         {isMeme && <p className="mt-2 text-xs text-ink/45">Use clips you filmed or have the rights to – not clips from TV, films or other people&apos;s videos.</p>}
       </section>
+
+      {isTalk && clip?.kind === "video" && (
+        <section className="mt-8">
+          <h2 className="label">4 · Which part to use (up to {TALK_MAX_SECONDS} seconds)</h2>
+          <div className="card p-4">
+            <ClipTrimmer
+              key={clip.id}
+              src={mediaUrl(clip.id)}
+              duration={clip.duration}
+              start={clipRange.start}
+              end={clipRange.end}
+              withEnd
+              maxLength={TALK_MAX_SECONDS}
+              onChange={setClipRange}
+            />
+            <p className="mt-3 text-xs text-ink/45">We turn what&apos;s said into captions that follow every word. You can fix any words afterwards.</p>
+          </div>
+        </section>
+      )}
 
       {isMeme && clip?.kind === "video" && (
         <section className="mt-8">
@@ -199,7 +224,7 @@ function NewReel() {
         </section>
       )}
 
-      {brand && style && !isMeme && (
+      {brand && style && !isMeme && !isTalk && (
         <section className="mt-8">
           <h2 className="label">4 · Pick how it should look</h2>
           <StylePicker brand={brand} brandId={id} template={template} media={previewMedia} value={style} recommended={recommended} onChange={setStyle} />
@@ -211,8 +236,13 @@ function NewReel() {
       <div className="mt-8 flex items-center justify-end gap-4">
         {needsTwo && <p className="text-sm text-ink/55">Select a before and an after photo</p>}
         {memeMissing && <p className="text-sm text-ink/55">{selected.length ? "Add a caption" : "Pick a clip"}</p>}
-        <button className="btn-primary px-8 py-3 text-base" onClick={generate} disabled={busy || (!isMeme && !topic.trim()) || needsTwo || memeMissing}>
-          {busy ? "Making your Reel…" : "Make my Reel ✨"}
+        {talkMissing && <p className="text-sm text-ink/55">Pick a video</p>}
+        <button
+          className="btn-primary px-8 py-3 text-base"
+          onClick={generate}
+          disabled={busy || (!isMeme && !isTalk && !topic.trim()) || needsTwo || memeMissing || talkMissing}
+        >
+          {busy ? (isTalk ? "Adding captions…" : "Making your Reel…") : "Make my Reel ✨"}
         </button>
       </div>
     </div>

@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { SiteInfo } from "./scrape";
 import { LANGUAGES, type Brand, type Language, type MediaItem, type PlanIdea, type ReelScript, type TemplateId } from "./types";
-import { TEMPLATES } from "./templates";
+import { TALK_MAX_SECONDS, TEMPLATES } from "./templates";
 import { cleanOverrides, STYLE_IDS, STYLES, type StyleId, type StyleOverrides } from "./styles";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
@@ -256,12 +256,20 @@ Language for all text: ${LANGUAGES[brand.language]}`;
 }
 
 function toScript(template: TemplateId, raw: z.infer<typeof scriptSchema>, media: MediaItem[]): ReelScript {
-  if (template === "meme") {
+  if (template === "meme" || template === "talk") {
     const clip = media.find((m) => m.kind === "video") ?? media[0];
+    const maxLen = template === "talk" ? TALK_MAX_SECONDS : 8;
     return {
       template,
       hook: raw.hook,
-      slides: [{ text: raw.slides[0]?.text ?? "", mediaId: clip?.id, clipStart: 0, clipEnd: clip?.duration ? Math.min(clip.duration, 8) : undefined }],
+      slides: [
+        {
+          text: template === "talk" ? "" : (raw.slides[0]?.text ?? ""),
+          mediaId: clip?.id,
+          clipStart: 0,
+          clipEnd: clip?.duration ? Math.min(clip.duration, maxLen) : undefined,
+        },
+      ],
       cta: raw.cta,
       caption: raw.caption,
       hashtags: raw.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`).replace(/\s+/g, "")),
@@ -294,7 +302,7 @@ Media available (by index): ${media.length ? media.map((m, i) => `${i}: ${m.kind
 
 Schema:
 {
-  "hook": string (${template === "meme" ? "the meme's top caption, max 16 words" : "max 8 words, on screen for 2 seconds"}),
+  "hook": string (${template === "meme" ? "the meme's top caption, max 16 words" : template === "talk" ? "a short title shown at the top, max 7 words" : "max 8 words, on screen for 2 seconds"}),
   "slides": [{ "text": string (max 14 words), "mediaIndex": number | null }] (${t.slideCount}),
   "cta": string (max 6 words, end card),
   "caption": string (Instagram caption, 2-4 short lines, may use 1-2 emojis),
@@ -338,6 +346,7 @@ function mockScript(brand: Brand, topic: string, template: TemplateId, media: Me
     beforeAfter: ["Before…", "…and after", `That's the ${brand.name} difference`],
     tips: offers.slice(0, 3).map((o, i) => `${i + 1}. ${o}`),
     meme: ["Every. Single. Time."],
+    talk: [""],
   };
   const slides = slidesByTemplate[template].map((text, i) => ({
     text,
@@ -617,4 +626,29 @@ Schema: { "ideas": [{ "date": "YYYY-MM-DD" (one of the dates above), "title": st
     const template = idea.template === "meme" && !canMeme ? "showcase" : idea.template;
     return { ...idea, date, template };
   });
+}
+
+// ---------- Voiceover ----------
+
+const voiceoverSchema = z.object({ text: text(700, 1.15) });
+
+/** A short spoken script for an AI voice (or for the owner to read), matching the Reel and the brand's language. */
+export async function writeVoiceover(brand: Brand, script: ReelScript, seconds: number): Promise<string> {
+  const words = Math.round(seconds * 2.4);
+  const onScreen = [script.hook, ...script.slides.map((s) => s.text), script.cta].filter(Boolean).join(" / ");
+  if (!aiEnabled()) return `${script.hook}. ${script.slides.map((s) => s.text).join(". ")}. ${script.cta}.`.replace(/\.\./g, ".");
+  const res = await askJson(
+    "You write voiceover scripts for short social videos for small businesses. Spoken, warm and natural – like the owner talking to a friend, not an advert. Short sentences. No hashtags, emojis, stage directions or quotation marks.",
+    `${brandBrief(brand)}
+
+The Reel's on-screen text, in order: ${onScreen}
+
+Write the voiceover for this Reel: about ${words} words (${Math.round(seconds)} seconds read aloud), following the same order and ending with the call to action. Write numbers and prices the way they are said. Stay within the brand facts.
+
+Schema: { "text": string }`,
+    voiceoverSchema,
+    1500,
+    true,
+  );
+  return res.text;
 }

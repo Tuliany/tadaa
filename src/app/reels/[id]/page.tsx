@@ -12,7 +12,7 @@ import TikTokPost from "@/components/TikTokPost";
 import { fetchBilling } from "@/lib/billing-client";
 import { api } from "@/lib/client";
 import { mediaUrl, toRenderProps } from "@/lib/props";
-import { TEMPLATES } from "@/lib/templates";
+import { TALK_MAX_SECONDS, TEMPLATES } from "@/lib/templates";
 import type { Brand, MediaItem, Reel, ReelScript } from "@/lib/types";
 import { pickStyle } from "@/lib/styles";
 import { lookPayload, type LookValue } from "@/lib/looks";
@@ -24,6 +24,7 @@ const ReelPlayer = dynamic(() => import("@/components/ReelPlayer"), {
 
 const StylePicker = dynamic(() => import("@/components/StylePicker"), { ssr: false });
 const SoundPanel = dynamic(() => import("@/components/SoundPanel"), { ssr: false });
+const VoicePanel = dynamic(() => import("@/components/VoicePanel"), { ssr: false });
 
 export default function ReelPage() {
   const { id } = useParams<{ id: string }>();
@@ -194,7 +195,7 @@ export default function ReelPage() {
             onSave={saveEdits}
           />
 
-          {reel.script.template !== "meme" && (
+          {reel.script.template !== "meme" && reel.script.template !== "talk" && (
           <div className="card p-5">
             <h2 className="font-bold">Look</h2>
             <div className="mt-3">
@@ -213,6 +214,8 @@ export default function ReelPage() {
             {reel.status === "approved" && <p className="mt-2 text-xs text-ink/45">Changing the look moves the Reel back to draft so you can approve the new version.</p>}
           </div>
           )}
+
+          <VoicePanel reel={reel} onChange={setReel} />
 
           <SoundPanel
             script={reel.script}
@@ -238,8 +241,8 @@ export default function ReelPage() {
               )}
             </div>
             <div className="mt-3 space-y-2">
-              <TextRow label={s.template === "meme" ? "Caption" : "Hook"} value={s.hook} editing={!!editing} onChange={(v) => editing && setEditing({ ...editing, hook: v })} />
-              {s.slides.map((slide, i) => (
+              <TextRow label={s.template === "meme" ? "Caption" : s.template === "talk" ? "Title" : "Hook"} value={s.hook} editing={!!editing} onChange={(v) => editing && setEditing({ ...editing, hook: v })} />
+              {s.template !== "talk" && s.slides.map((slide, i) => (
                 <TextRow
                   key={i}
                   label={s.template === "meme" ? "Punchline" : `Slide ${i + 1}`}
@@ -295,7 +298,8 @@ function ClipsCard({
   onPreview: (slides: ReelScript["slides"], sound: boolean) => void;
   onSave: () => void;
 }) {
-  const meme = script.template === "meme";
+  const talk = script.template === "talk";
+  const meme = script.template === "meme" || talk;
   const clips = script.slides
     .map((slide, i) => ({ slide, i, m: media.find((x) => x.id === slide.mediaId) }))
     .filter((c) => c.m?.kind === "video");
@@ -304,7 +308,7 @@ function ClipsCard({
   return (
     <div className="card p-5">
       <div className="flex items-center justify-between">
-        <h2 className="font-bold">{meme ? "The moment" : "Clips"}</h2>
+        <h2 className="font-bold">{talk ? "Which part to use" : meme ? "The moment" : "Clips"}</h2>
         {dirty && (
           <button className="text-sm font-bold text-coral" onClick={onSave} disabled={saving}>
             Save
@@ -321,6 +325,7 @@ function ClipsCard({
               start={slide.clipStart ?? 0}
               end={slide.clipEnd}
               withEnd={meme}
+              maxLength={talk ? TALK_MAX_SECONDS : undefined}
               onChange={(r) =>
                 onPreview(
                   script.slides.map((x, j) => (j === i ? { ...x, clipStart: r.start, ...(meme ? { clipEnd: r.end } : {}) } : x)),
@@ -331,10 +336,12 @@ function ClipsCard({
           </div>
         ))}
       </div>
-      <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
-        <input type="checkbox" className="accent-coral" checked={sound} onChange={(e) => onPreview(script.slides, e.target.checked)} />
-        Keep the clips&apos; own sound
-      </label>
+      {!talk && (
+        <label className="mt-4 flex items-center gap-2 text-sm font-semibold">
+          <input type="checkbox" className="accent-coral" checked={sound} onChange={(e) => onPreview(script.slides, e.target.checked)} />
+          Keep the clips&apos; own sound
+        </label>
+      )}
     </div>
   );
 }

@@ -84,9 +84,11 @@ export function startRender(brand: Brand, reel: Reel): Promise<string> {
     const watermark = await needsWatermark(brand.id);
     const props = { ...toRenderProps(brand, reel, media, origin), watermark };
     // The renderer has no login cookie; give it this process's render token for our own media URLs.
-    const withToken = (u?: string) => (u && u.startsWith(`${origin}/api/media/`) ? `${u}?rt=${renderToken()}` : u);
+    const withToken = (u?: string) =>
+      u && (u.startsWith(`${origin}/api/media/`) || u.startsWith(`${origin}/api/voices/`)) ? `${u}?rt=${renderToken()}` : u;
     props.media = props.media.map((m) => ({ ...m, url: withToken(m.url)! }));
     props.brand = { ...props.brand, logoUrl: withToken(props.brand.logoUrl) };
+    if (props.audio?.voice) props.audio = { ...props.audio, voice: { ...props.audio.voice, url: withToken(props.audio.voice.url)! } };
     const propsFile = path.join(os.tmpdir(), `tadaa-${id}-${Date.now()}.json`);
     await fs.writeFile(propsFile, JSON.stringify(props));
     const fileName = `${id}-${Date.now()}.mp4`;

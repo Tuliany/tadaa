@@ -36,6 +36,14 @@ export const TEMPLATES: Record<
     slideCount: "1 slide (the clip)",
     mediaHint: "One short video clip (your own, or a licence-free stock clip)",
   },
+  talk: {
+    name: "Talking video",
+    description: "You or your team talking to the camera, with captions that follow every word.",
+    scriptGuide:
+      "A talking-to-camera video: the person's own words are the content (captions are added from the speech automatically). The hook is a short title shown at the top during the first seconds (max 7 words). Exactly 1 slide using mediaIndex 0 with empty text. Then a call to action for the end card.",
+    slideCount: "1 slide (the video)",
+    mediaHint: "One video of someone talking (up to 60 seconds)",
+  },
   tips: {
     name: "Tips list",
     description: "Numbered tips or facts that position you as the expert.",
@@ -45,36 +53,58 @@ export const TEMPLATES: Record<
   },
 };
 
-/** Frame lengths for a Reel, adjusted for its look's pace (Quick Cuts is faster, Calm Luxury slower). */
-export function timing(script: Pick<ReelScript, "style" | "styleOverrides">) {
+/** Frame lengths for a Reel, adjusted for its look's pace (Quick Cuts is faster, Calm Luxury slower).
+ * With a voiceover, the slides stretch so the Reel lasts as long as the voice. */
+export function timing(script: Pick<ReelScript, "style" | "styleOverrides"> & Partial<Pick<ReelScript, "slides" | "voice" | "template">>) {
   const pace = styleOf(script).pace;
-  return {
+  const t = {
     hook: Math.round(HOOK_FRAMES * Math.min(pace, 1.15)),
     slide: Math.round(SLIDE_FRAMES * pace),
     cta: Math.round(CTA_FRAMES * Math.min(Math.max(pace, 0.9), 1.15)),
   };
+  const v = script.voice;
+  if (v && v.source !== "clip" && v.duration > 0 && script.slides?.length) {
+    const n = script.slides.length;
+    // The voice plays from the start; the end card may overlap its last words.
+    const total = Math.max(t.hook + n * t.slide + t.cta, Math.ceil((v.duration + 0.7) * FPS) + Math.round(t.cta * 0.4));
+    t.slide = Math.ceil((total - t.hook - t.cta) / n);
+  }
+  return t;
 }
 
 export const MEME_END_FRAMES = 45; // 1.5 s logo card
 export const MEME_DEFAULT_SECONDS = 6;
 export const MEME_MAX_SECONDS = 20;
+/** Talking video: longest part of the clip used. */
+export const TALK_MAX_SECONDS = 60;
 
-/** Meme: how long the clip plays (from clipStart to clipEnd, capped). */
-export function memeClipFrames(script: Pick<ReelScript, "slides">) {
+/** Formats built around one clip (Meme, Talking video). */
+export const isClipTemplate = (t: TemplateId) => t === "meme" || t === "talk";
+export const maxClipSeconds = (t: TemplateId) => (t === "talk" ? TALK_MAX_SECONDS : MEME_MAX_SECONDS);
+
+/** Meme / Talking video: how long the clip plays (from clipStart to clipEnd, capped). */
+export function memeClipFrames(script: Pick<ReelScript, "slides"> & Partial<Pick<ReelScript, "template" | "voice">>) {
   const s = script.slides[0];
   const start = s?.clipStart ?? 0;
-  const len = s?.clipEnd != null && s.clipEnd > start ? s.clipEnd - start : MEME_DEFAULT_SECONDS;
-  return Math.round(Math.min(Math.max(len, 1), MEME_MAX_SECONDS) * FPS);
+  const fallback = script.template === "talk" ? (script.voice?.duration ?? 15) - start : MEME_DEFAULT_SECONDS;
+  const len = s?.clipEnd != null && s.clipEnd > start ? s.clipEnd - start : fallback;
+  return Math.round(Math.min(Math.max(len, 1), maxClipSeconds(script.template ?? "meme")) * FPS);
 }
 
-export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template">) {
-  if (script.template === "meme") return memeClipFrames(script) + MEME_END_FRAMES;
+export function reelDuration(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template" | "voice">) {
+  if (isClipTemplate(script.template)) return memeClipFrames(script) + MEME_END_FRAMES;
   const t = timing(script);
   return t.hook + script.slides.length * t.slide + t.cta;
 }
 
 /** Moments a sound effect can be placed at, with labels, for this Reel. */
-export function soundMoments(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template">): { at: string; label: string; frame: number }[] {
+export function soundMoments(script: Pick<ReelScript, "slides" | "style" | "styleOverrides" | "template" | "voice">): { at: string; label: string; frame: number }[] {
+  if (script.template === "talk") {
+    return [
+      { at: "start", label: "Start", frame: 0 },
+      { at: "end", label: "End card", frame: memeClipFrames(script) },
+    ];
+  }
   if (script.template === "meme") {
     const clip = memeClipFrames(script);
     return [
