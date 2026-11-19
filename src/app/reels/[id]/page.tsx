@@ -228,7 +228,14 @@ export default function ReelPage() {
           </div>
 
           {(reel.script.template === "showcase" || reel.script.template === "tips" || reel.script.template === "beforeAfter") && (
-            <SlidesCard script={editing ?? reel.script} media={media} saving={busy === "save"} onSave={(slides) => patchScript({ slides })} />
+            <SlidesCard
+              script={editing ?? reel.script}
+              media={media}
+              brand={brand}
+              saving={busy === "save"}
+              onSave={(slides) => patchScript({ slides })}
+              onEndCard={(endCard) => patchScript({ endCard: (endCard ?? null) as ReelScript["endCard"] })}
+            />
           )}
 
           <ClipsCard

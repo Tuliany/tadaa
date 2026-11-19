@@ -58,6 +58,17 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
     }));
     slideMedia = body.script.slides.map((x) => x.mediaId).filter((x): x is string => !!x);
   }
+  if (body.script && "endCard" in body.script) {
+    const e = (body.script.endCard ?? {}) as Record<string, unknown>;
+    const own = typeof e.mediaId === "string" ? (await listMedia(reel.brandId)).some((m) => m.id === e.mediaId) : false;
+    const ec = {
+      ...(e.hidden === true ? { hidden: true } : {}),
+      ...(own ? { mediaId: e.mediaId as string } : {}),
+      ...(e.logo === false ? { logo: false } : {}),
+      ...(e.name === false ? { name: false } : {}),
+    };
+    body.script.endCard = Object.keys(ec).length ? ec : undefined;
+  }
   if (body.script && "textPos" in body.script) {
     const t = body.script.textPos as Record<string, unknown> | null | undefined;
     const hook = cleanPos(t?.hook);
