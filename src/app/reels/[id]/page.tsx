@@ -13,7 +13,7 @@ import { fetchBilling } from "@/lib/billing-client";
 import { api } from "@/lib/client";
 import { mediaUrl, toRenderProps } from "@/lib/props";
 import { TALK_MAX_SECONDS, TEMPLATES } from "@/lib/templates";
-import type { Brand, MediaItem, Reel, ReelScript } from "@/lib/types";
+import type { Brand, EditField, MediaItem, Reel, ReelScript } from "@/lib/types";
 import { pickStyle } from "@/lib/styles";
 import { lookPayload, type LookValue } from "@/lib/looks";
 
@@ -26,6 +26,7 @@ const StylePicker = dynamic(() => import("@/components/StylePicker"), { ssr: fal
 const SoundPanel = dynamic(() => import("@/components/SoundPanel"), { ssr: false });
 const VoicePanel = dynamic(() => import("@/components/VoicePanel"), { ssr: false });
 const TitleStyleCard = dynamic(() => import("@/components/TitleStyleCard"), { ssr: false });
+const SlidesCard = dynamic(() => import("@/components/SlidesCard"), { ssr: false });
 
 export default function ReelPage() {
   const { id } = useParams<{ id: string }>();
@@ -90,6 +91,30 @@ export default function ReelPage() {
       setEditing(null);
     });
 
+  /** Saves part of the script right away (or into the open text edit, if one is going on). */
+  const patchScript = (patch: Partial<ReelScript>) => {
+    if (editing) {
+      setEditing({ ...editing, ...patch });
+      return;
+    }
+    run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: patch } })));
+  };
+
+  /** A text was edited by clicking it in the video. */
+  const editText = (field: EditField, value: string) => {
+    const current = editing ?? reel?.script;
+    if (!current) return;
+    if (field === "hook") patchScript({ hook: value });
+    else if (field === "cta") patchScript({ cta: value });
+    else {
+      const i = Number(field.slice(6));
+      patchScript({ slides: current.slides.map((x, j) => (j === i ? { ...x, text: value } : x)) });
+    }
+  };
+
+  const moveWatermark = (pos: { x: number; y: number }) =>
+    run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: { watermarkPos: pos } } })));
+
   const [renderPct, setRenderPct] = useState<number | null>(null);
 
   const download = () =>
@@ -135,7 +160,7 @@ export default function ReelPage() {
 
       <div className="mt-8 grid md:grid-cols-[340px_minmax(0,1fr)] gap-10">
         <div>
-          <ReelPlayer props={props} />
+          <ReelPlayer props={props} onEditText={editText} onMoveWatermark={moveWatermark} />
           <div className="mt-4 grid gap-2">
             {reel.status === "approved" ? (
               <>
@@ -186,6 +211,10 @@ export default function ReelPage() {
               </ul>
             )}
           </div>
+
+          {(reel.script.template === "showcase" || reel.script.template === "tips" || reel.script.template === "beforeAfter") && (
+            <SlidesCard script={editing ?? reel.script} media={media} saving={busy === "save"} onSave={(slides) => patchScript({ slides })} />
+          )}
 
           <ClipsCard
             script={editing ?? reel.script}

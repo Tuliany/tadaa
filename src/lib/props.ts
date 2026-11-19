@@ -27,7 +27,8 @@ export function toRenderProps(brand: Brand, reel: Pick<Reel, "script" | "mediaId
   return {
     brand: { name: brand.name, colors: brand.colors, logoUrl: absolute(brand.logoUrl, origin) },
     script: reel.script,
-    media: reel.mediaIds
+    // The Reel's media plus any picture a slide was switched to.
+    media: [...new Set([...reel.mediaIds, ...reel.script.slides.map((x) => x.mediaId).filter((x): x is string => !!x)])]
       .map((id) => byId.get(id))
       .filter((m): m is MediaItem => !!m)
       .map((m) => ({ id: m.id, kind: m.kind, url: absolute(mediaUrl(m.id), origin)! })),

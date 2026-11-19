@@ -10,7 +10,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import type { ReelRenderProps, Slide, TitleStyle, VoiceWord } from "../lib/types";
+import type { EditField, ReelRenderProps, Slide, TitleStyle, VoiceWord } from "../lib/types";
 import { MEME_END_FRAMES, memeClipFrames, timing } from "../lib/templates";
 import { styleOf, TITLE_SIZE, type StyleSpec } from "../lib/styles";
 import { contrastRatio, readableOn, textOn } from "../lib/color";
@@ -97,6 +97,22 @@ function Letterbox({ s }: { s: StyleSpec }) {
   );
 }
 
+/** Preview only: click a text to edit it (the player shows an editor on top). Nothing changes in renders. */
+function editProps(props: ReelRenderProps, field: EditField, value: string): React.HTMLAttributes<HTMLDivElement> | undefined {
+  const edit = props.edit;
+  if (!edit) return undefined;
+  return {
+    className: "tadaa-editable",
+    title: "Click to edit",
+    style: { cursor: "text", pointerEvents: "auto" },
+    onPointerDown: (e) => e.stopPropagation(),
+    onClick: (e) => {
+      e.stopPropagation();
+      edit.onSelect(field, value, e.currentTarget.getBoundingClientRect());
+    },
+  };
+}
+
 /** Styled text: animation, font, case and treatment (pill, box, captions outline, lower-third bar, sticker). */
 function StyledText({
   children,
@@ -106,6 +122,7 @@ function StyledText({
   accent,
   delay = 0,
   forceShadow = false,
+  edit,
 }: {
   children: string;
   s: StyleSpec;
@@ -114,6 +131,8 @@ function StyledText({
   accent: string;
   delay?: number;
   forceShadow?: boolean;
+  /** Preview only: makes the text clickable for editing. */
+  edit?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -170,7 +189,7 @@ function StyledText({
     const words = text.split(/\s+/);
     const per = Math.max(3, Math.floor(30 / Math.max(words.length, 1)));
     return (
-      <div style={{ ...base, ...look }}>
+      <div {...edit} style={{ ...base, ...look, ...edit?.style }}>
         {words.map((w, i) => (
           <span key={i} style={{ opacity: t >= i * per ? 1 : 0, color: i === Math.floor(t / per) % words.length ? accent : "#fff" }}>
             {w}{" "}
@@ -181,7 +200,7 @@ function StyledText({
   }
   const wrap: React.CSSProperties = treatment === "tilt" ? {} : look;
   return (
-    <div style={{ ...base, ...anim, ...wrap }}>
+    <div {...edit} style={{ ...base, ...anim, ...wrap, ...edit?.style }}>
       {treatment === "tilt" ? <span style={look}>{text}</span> : text}
     </div>
   );
@@ -217,6 +236,7 @@ function Hook({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
         <StyledText
           s={s}
           size={Math.round(hookSize(script.hook.length) * Math.min(s.size, 1.25))}
+          edit={editProps(props, "hook", script.hook)}
           color={s.framed ? "#111111" : onPhoto ? "#ffffff" : readableOn(brand.colors.background)}
           accent={brand.colors.primary}
           forceShadow={s.treatment === "pill" || s.treatment === "bar" || s.treatment === "tilt"}
@@ -246,7 +266,15 @@ function SlideCard({ slide, index, props, s }: { slide: Slide; index: number; pr
         <MediaLayer media={m} s={s} reverse={index % 2 === 1} clipStart={slide.clipStart} sound={!!script.sound} />
         {m && <Shade s={s} extra={classic && isTips ? 0.2 : 0} />}
         <AbsoluteFill style={{ ...(place as React.CSSProperties), display: captionsOn(props) ? "none" : undefined }}>
-          <StyledText s={s} size={size} color={color} accent={brand.colors.primary} delay={s.transition === "slide" ? 6 : 0} forceShadow={classic && !onPill}>
+          <StyledText
+            s={s}
+            size={size}
+            color={color}
+            accent={brand.colors.primary}
+            delay={s.transition === "slide" ? 6 : 0}
+            forceShadow={classic && !onPill}
+            edit={editProps(props, `slide:${index}`, slide.text)}
+          >
             {slide.text}
           </StyledText>
         </AbsoluteFill>
@@ -303,14 +331,28 @@ function BeforeAfter({ props, s, slideFrames }: { props: ReelRenderProps; s: Sty
       <Shade s={{ ...full, shade: Math.max(s.shade, 0.45) }} />
       <Sequence durationInFrames={slideFrames - 10} layout="none">
         <AbsoluteFill style={textPlace}>
-          <StyledText s={full} size={Math.round(72 * s.size)} color="#ffffff" accent={brand.colors.primary} forceShadow={s.treatment === "pill"}>
+          <StyledText
+            s={full}
+            size={Math.round(72 * s.size)}
+            color="#ffffff"
+            accent={brand.colors.primary}
+            forceShadow={s.treatment === "pill"}
+            edit={editProps(props, "slide:0", script.slides[0]?.text ?? "")}
+          >
             {script.slides[0]?.text ?? ""}
           </StyledText>
         </AbsoluteFill>
       </Sequence>
       <Sequence from={wipeStart + 24} layout="none">
         <AbsoluteFill style={textPlace}>
-          <StyledText s={full} size={Math.round(72 * s.size)} color="#ffffff" accent={brand.colors.primary} forceShadow={s.treatment === "pill"}>
+          <StyledText
+            s={full}
+            size={Math.round(72 * s.size)}
+            color="#ffffff"
+            accent={brand.colors.primary}
+            forceShadow={s.treatment === "pill"}
+            edit={editProps(props, "slide:1", script.slides[1]?.text ?? "")}
+          >
             {script.slides[1]?.text ?? ""}
           </StyledText>
         </AbsoluteFill>
@@ -345,7 +387,7 @@ function EndCard({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
           {s.upper ? brand.name.toUpperCase() : brand.name}
         </div>
       )}
-      <StyledText s={plain} size={Math.round(76 * Math.min(s.size, 1.2))} color={fg} accent={brand.colors.primary} delay={8}>
+      <StyledText s={plain} size={Math.round(76 * Math.min(s.size, 1.2))} color={fg} accent={brand.colors.primary} delay={8} edit={editProps(props, "cta", script.cta)}>
         {script.cta}
       </StyledText>
       {brand.logoUrl && (
@@ -386,7 +428,9 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
         }}
       >
         <div
+          {...editProps(props, "hook", caption)}
           style={{
+            ...editProps(props, "hook", caption)?.style,
             fontFamily: fontOf({ ...s, font: t?.font ?? s.font }),
             fontWeight: (t?.font ?? s.font) === "bebas" || (t?.font ?? s.font) === "dmSerif" ? 400 : Math.max(s.weight, 700),
             fontSize: Math.round(size * TITLE_SIZE[t?.size ?? "m"]),
@@ -404,7 +448,13 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
         {slide?.text && frame >= punchAt && (
           <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: "0 60px 170px" }}>
             <Sequence from={punchAt} layout="none">
-              <StyledText s={{ ...s, treatment: "outline", wordByWord: false, transition: "pop", upper: true }} size={80} color="#ffffff" accent={brand.colors.primary}>
+              <StyledText
+                s={{ ...s, treatment: "outline", wordByWord: false, transition: "pop", upper: true }}
+                size={80}
+                color="#ffffff"
+                accent={brand.colors.primary}
+                edit={editProps(props, "slide:0", slide.text)}
+              >
                 {slide.text}
               </StyledText>
             </Sequence>
@@ -431,14 +481,43 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
   );
 }
 
-/** Small "Made with Tadaa" mark on free-trial Reels. */
-function Watermark() {
+/** Small "Made with Tadaa" mark on free-trial Reels. Top right unless moved; draggable in the preview. */
+function Watermark({ props }: { props: ReelRenderProps }) {
+  const saved = props.script.watermarkPos;
+  const [drag, setDrag] = React.useState<{ x: number; y: number } | null>(null);
+  const pos = drag ?? saved;
+  const edit = props.edit;
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    const root = e.currentTarget.parentElement?.getBoundingClientRect();
+    if (!root) return null;
+    return { x: Math.min(Math.max((e.clientX - root.left) / root.width, 0.08), 0.92), y: Math.min(Math.max((e.clientY - root.top) / root.height, 0.04), 0.96) };
+  };
   return (
     <div
+      title={edit ? "Drag to move" : undefined}
+      onPointerDown={
+        edit
+          ? (e) => {
+              e.stopPropagation();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setDrag(move(e));
+            }
+          : undefined
+      }
+      onPointerMove={edit ? (e) => drag && setDrag(move(e)) : undefined}
+      onPointerUp={
+        edit
+          ? (e) => {
+              const p = move(e) ?? drag;
+              setDrag(null);
+              if (p) edit.onWatermark(p);
+            }
+          : undefined
+      }
+      onClick={edit ? (e) => e.stopPropagation() : undefined}
       style={{
         position: "absolute",
-        top: 70,
-        right: 40,
+        ...(pos ? { left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, transform: "translate(-50%, -50%)" } : { top: 70, right: 40 }),
         padding: "10px 22px",
         borderRadius: 999,
         background: "rgba(0,0,0,0.55)",
@@ -447,6 +526,12 @@ function Watermark() {
         fontWeight: 700,
         fontSize: 30,
         letterSpacing: 0.3,
+        whiteSpace: "nowrap",
+        cursor: edit ? (drag ? "grabbing" : "grab") : undefined,
+        touchAction: "none",
+        userSelect: "none",
+        pointerEvents: edit ? "auto" : undefined,
+        outline: drag ? "3px dashed rgba(255,255,255,0.9)" : undefined,
       }}
     >
       Made with <span style={{ color: "#ff6b5b" }}>Tadaa!</span>
@@ -462,7 +547,8 @@ export const Reel: React.FC<ReelRenderProps> = (props) => (
         <Captions words={props.script.voice!.words} s={styleOf(props.script)} accent={props.brand.colors.primary} bottom={300} />
       </Sequence>
     )}
-    {props.watermark && <Watermark />}
+    {props.watermark && <Watermark props={props} />}
+    {props.edit && <style>{`.tadaa-editable:hover{outline:6px dashed rgba(255,255,255,0.85);outline-offset:10px;border-radius:8px}`}</style>}
     <Soundtrack audio={props.audio} />
   </AbsoluteFill>
 );
@@ -530,7 +616,7 @@ function Captions({ words, s, accent, bottom, offset = 0 }: { words: VoiceWord[]
 }
 
 /** Talking video title: the brand look, or the customer's own size, font and colours. */
-function TalkTitle({ text, s, accent, t }: { text: string; s: StyleSpec; accent: string; t?: TitleStyle }) {
+function TalkTitle({ text, s, accent, t, edit }: { text: string; s: StyleSpec; accent: string; t?: TitleStyle; edit?: React.HTMLAttributes<HTMLDivElement> }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame, fps, config: { damping: 14 } });
@@ -542,7 +628,9 @@ function TalkTitle({ text, s, accent, t }: { text: string; s: StyleSpec; accent:
   const upper = t?.upper ?? s.upper;
   return (
     <div
+      {...edit}
       style={{
+        ...edit?.style,
         fontFamily: `${FONTS[font]}, 'Helvetica Neue', Helvetica, Arial, sans-serif`,
         fontWeight: font === "bebas" || font === "dmSerif" ? 400 : Math.max(s.weight, 800),
         fontSize: size,
@@ -577,7 +665,7 @@ function Talk({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
       <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.35) 100%)" }} />
       {script.hook && frame < 110 && (
         <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", padding: "200px 70px 0", opacity: titleOut }}>
-          <TalkTitle text={script.hook} s={s} accent={brand.colors.primary} t={script.titleStyle} />
+          <TalkTitle text={script.hook} s={s} accent={brand.colors.primary} t={script.titleStyle} edit={editProps(props, "hook", script.hook)} />
         </AbsoluteFill>
       )}
       {voice?.captions && voice.words.length > 0 && frame < clipFrames && (

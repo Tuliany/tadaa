@@ -1,6 +1,6 @@
 import { isStyleId } from "@/lib/styles";
-import { handle, requireReel } from "@/lib/auth";
-import { getBrand } from "@/lib/db";
+import { handle, HttpError, requireReel } from "@/lib/auth";
+import { getBrand, listMedia } from "@/lib/db";
 import { saveReel } from "@/lib/db";
 import { getStoredSound, strip } from "@/lib/sounds";
 import { cleanTitleStyle } from "@/lib/styles";
@@ -31,14 +31,29 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
     }
   }
 
+  let slideMedia: string[] = [];
   if (body.script?.slides) {
+    if (!Array.isArray(body.script.slides) || !body.script.slides.length) throw new HttpError(400, "A Reel needs at least one slide.");
+    const t = reel.script.template;
+    if (t === "beforeAfter" && body.script.slides.length !== 2) throw new HttpError(400, "Before & After always has two slides.");
+    if ((t === "meme" || t === "talk") && body.script.slides.length !== 1) throw new HttpError(400, "This format has one clip.");
+    // Slides may only show the brand's own photos and clips.
+    const own = new Set((await listMedia(reel.brandId)).map((m) => m.id));
     const n = (v: unknown) => (typeof v === "number" && isFinite(v) && v >= 0 && v < 3600 ? Math.round(v * 10) / 10 : undefined);
     body.script.slides = body.script.slides.slice(0, 8).map((x) => ({
       text: String(x.text ?? "").slice(0, 200),
-      mediaId: typeof x.mediaId === "string" ? x.mediaId : undefined,
+      mediaId: typeof x.mediaId === "string" && own.has(x.mediaId) ? x.mediaId : undefined,
       clipStart: n(x.clipStart),
       clipEnd: n(x.clipEnd),
     }));
+    slideMedia = body.script.slides.map((x) => x.mediaId).filter((x): x is string => !!x);
+  }
+  if (body.script && "watermarkPos" in body.script) {
+    const p = body.script.watermarkPos as { x?: unknown; y?: unknown } | null | undefined;
+    const c = (v: unknown) => (typeof v === "number" && isFinite(v) ? Math.min(Math.max(v, 0.08), 0.92) : null);
+    const x = c(p?.x);
+    const y = c(p?.y);
+    body.script.watermarkPos = x !== null && y !== null ? { x: Math.round(x * 1000) / 1000, y: Math.round(y * 1000) / 1000 } : undefined;
   }
   if (body.script && "sound" in body.script) body.script.sound = !!body.script.sound;
 
@@ -65,6 +80,7 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
   if (body.status === "approved" || body.status === "draft") next.status = body.status;
   if (body.script) {
     next.script = { ...reel.script, ...body.script, template: reel.script.template };
+    if (slideMedia.length) next.mediaIds = [...new Set([...slideMedia, ...reel.mediaIds])];
     if (body.script.style !== undefined && !isStyleId(body.script.style)) next.script.style = reel.script.style;
     next.status = "draft";
     next.renderFile = undefined;

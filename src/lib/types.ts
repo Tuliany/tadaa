@@ -190,6 +190,8 @@ export interface ReelScript {
   referenceId?: string;
   /** Meme / Talking video: the customer's own look for the title (top caption). */
   titleStyle?: TitleStyle;
+  /** Where the trial watermark sits (centre, as fractions of width and height); top right when unset. */
+  watermarkPos?: { x: number; y: number };
   hook: string;
   slides: Slide[];
   /** Keep the clips' own sound (Meme default); otherwise clips are muted. */
@@ -360,7 +362,19 @@ export interface StoredVoice extends Omit<VoiceTrack, "captions"> {
 /** Moments a sound effect can play at: "hook", "s0"…"s7" (slides), "cta"; memes: "start", "punch", "end". */
 export type SoundMoment = string;
 
+/** Text fields that can be clicked and edited in the preview. */
+export type EditField = "hook" | "cta" | `slide:${number}`;
+
+/** Preview-only editing hooks (never sent to the server renderer). */
+export interface ReelEditHooks {
+  /** A text was clicked: where it is on screen, so the editor can open on top of it. */
+  onSelect: (field: EditField, value: string, rect: DOMRect) => void;
+  /** The watermark was dragged to a new spot. */
+  onWatermark: (pos: { x: number; y: number }) => void;
+}
+
 export interface ReelRenderProps {
+  edit?: ReelEditHooks;
   /** Background music and sound effects, resolved to URLs and frames. */
   audio?: {
     music?: { url: string; volume: number };
