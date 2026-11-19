@@ -158,6 +158,17 @@ export interface MediaItem {
   createdAt: string;
 }
 
+/** Size, font and colours chosen for a Meme caption or Talking video title. */
+export interface TitleStyle {
+  size?: "s" | "m" | "l" | "xl";
+  font?: "inter" | "playfair" | "bebas" | "nunito" | "montserrat" | "dmSerif";
+  /** Text colour, #rrggbb */
+  color?: string;
+  /** Box colour (Talking video) or caption area colour (Meme), #rrggbb; "none" = no box. */
+  background?: string;
+  upper?: boolean;
+}
+
 export type TemplateId = "showcase" | "beforeAfter" | "tips" | "meme" | "talk";
 
 export interface Slide {
@@ -177,6 +188,8 @@ export interface ReelScript {
   styleOverrides?: import("./styles").StyleOverrides;
   /** The brand reference those tweaks came from. */
   referenceId?: string;
+  /** Meme / Talking video: the customer's own look for the title (top caption). */
+  titleStyle?: TitleStyle;
   hook: string;
   slides: Slide[];
   /** Keep the clips' own sound (Meme default); otherwise clips are muted. */

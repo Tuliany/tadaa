@@ -10,9 +10,9 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import type { ReelRenderProps, Slide, VoiceWord } from "../lib/types";
+import type { ReelRenderProps, Slide, TitleStyle, VoiceWord } from "../lib/types";
 import { MEME_END_FRAMES, memeClipFrames, timing } from "../lib/templates";
-import { styleOf, type StyleSpec } from "../lib/styles";
+import { styleOf, TITLE_SIZE, type StyleSpec } from "../lib/styles";
 import { contrastRatio, readableOn, textOn } from "../lib/color";
 import { FONTS } from "./fonts";
 
@@ -365,10 +365,13 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
   const clip = media.find((m) => m.id === slide?.mediaId) ?? media[0];
   const caption = script.hook;
   const size = caption.length > 70 ? 62 : caption.length > 40 ? 72 : 84;
+  const t = script.titleStyle;
+  // The caption area: white unless the customer picked a colour.
+  const areaBg = t?.background && t.background !== "none" ? t.background : "#ffffff";
   const punchAt = Math.max(0, clipFrames - 40);
   const still = { ...s, motion: 0, grade: s.grade, framed: false };
   return (
-    <AbsoluteFill style={{ background: "#fff" }}>
+    <AbsoluteFill style={{ background: areaBg }}>
       <div
         style={{
           position: "absolute",
@@ -382,8 +385,18 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
           justifyContent: "center",
         }}
       >
-        <div style={{ fontFamily: fontOf(s), fontWeight: Math.max(s.weight, 700), fontSize: size, lineHeight: 1.15, color: "#111", textAlign: "center", letterSpacing: -0.5 }}>
-          {s.upper ? caption.toUpperCase() : caption}
+        <div
+          style={{
+            fontFamily: fontOf({ ...s, font: t?.font ?? s.font }),
+            fontWeight: (t?.font ?? s.font) === "bebas" || (t?.font ?? s.font) === "dmSerif" ? 400 : Math.max(s.weight, 700),
+            fontSize: Math.round(size * TITLE_SIZE[t?.size ?? "m"]),
+            lineHeight: 1.15,
+            color: t?.color ?? readableOn(areaBg),
+            textAlign: "center",
+            letterSpacing: -0.5,
+          }}
+        >
+          {(t?.upper ?? s.upper) ? caption.toUpperCase() : caption}
         </div>
       </div>
       <div style={{ position: "absolute", top: 600, left: 0, right: 0, bottom: 0, overflow: "hidden", background: "#000" }}>
@@ -516,6 +529,39 @@ function Captions({ words, s, accent, bottom, offset = 0 }: { words: VoiceWord[]
   );
 }
 
+/** Talking video title: the brand look, or the customer's own size, font and colours. */
+function TalkTitle({ text, s, accent, t }: { text: string; s: StyleSpec; accent: string; t?: TitleStyle }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = spring({ frame, fps, config: { damping: 14 } });
+  const bg = t?.background ?? accent;
+  const box = bg !== "none";
+  const size = Math.round(64 * TITLE_SIZE[t?.size ?? "m"]);
+  const color = t?.color ?? (box ? textOn(bg, "#ffffff") : "#ffffff");
+  const font = t?.font ?? s.font;
+  const upper = t?.upper ?? s.upper;
+  return (
+    <div
+      style={{
+        fontFamily: `${FONTS[font]}, 'Helvetica Neue', Helvetica, Arial, sans-serif`,
+        fontWeight: font === "bebas" || font === "dmSerif" ? 400 : Math.max(s.weight, 800),
+        fontSize: size,
+        lineHeight: 1.12,
+        color,
+        textAlign: "center",
+        maxWidth: 940,
+        transform: `scale(${0.85 + 0.15 * enter})`,
+        opacity: enter,
+        ...(box
+          ? { background: bg, padding: `${Math.round(size * 0.28)}px ${Math.round(size * 0.47)}px`, borderRadius: Math.round(size * 0.34) }
+          : { WebkitTextStroke: `${Math.round(size / 14)}px #000`, paintOrder: "stroke fill", textShadow: "0 6px 0 rgba(0,0,0,0.35)" }),
+      }}
+    >
+      {upper ? text.toUpperCase() : text}
+    </div>
+  );
+}
+
 /** Talking video: the clip full screen with its own sound, a short title at the top, captions from the speech. */
 function Talk({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; clipFrames: number }) {
   const frame = useCurrentFrame();
@@ -531,9 +577,7 @@ function Talk({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
       <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.35) 100%)" }} />
       {script.hook && frame < 110 && (
         <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", padding: "200px 70px 0", opacity: titleOut }}>
-          <StyledText s={{ ...s, treatment: "pill", wordByWord: false }} size={64} color="#ffffff" accent={brand.colors.primary}>
-            {script.hook}
-          </StyledText>
+          <TalkTitle text={script.hook} s={s} accent={brand.colors.primary} t={script.titleStyle} />
         </AbsoluteFill>
       )}
       {voice?.captions && voice.words.length > 0 && frame < clipFrames && (

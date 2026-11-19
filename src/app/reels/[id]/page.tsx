@@ -25,6 +25,7 @@ const ReelPlayer = dynamic(() => import("@/components/ReelPlayer"), {
 const StylePicker = dynamic(() => import("@/components/StylePicker"), { ssr: false });
 const SoundPanel = dynamic(() => import("@/components/SoundPanel"), { ssr: false });
 const VoicePanel = dynamic(() => import("@/components/VoicePanel"), { ssr: false });
+const TitleStyleCard = dynamic(() => import("@/components/TitleStyleCard"), { ssr: false });
 
 export default function ReelPage() {
   const { id } = useParams<{ id: string }>();
@@ -213,6 +214,19 @@ export default function ReelPage() {
             </div>
             {reel.status === "approved" && <p className="mt-2 text-xs text-ink/45">Changing the look moves the Reel back to draft so you can approve the new version.</p>}
           </div>
+          )}
+
+          {(reel.script.template === "meme" || reel.script.template === "talk") && (
+            <TitleStyleCard
+              script={reel.script}
+              brand={brand}
+              saving={busy === "save"}
+              onSave={(titleStyle) =>
+                run("save", async () =>
+                  setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: { titleStyle: titleStyle ?? null } } })),
+                )
+              }
+            />
           )}
 
           <VoicePanel reel={reel} onChange={setReel} />

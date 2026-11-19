@@ -229,3 +229,22 @@ export function styleOf(script: Pick<ReelScript, "style" | "styleOverrides">): S
   const base = STYLES[script.style && isStyleId(script.style) ? script.style : "bold"];
   return script.styleOverrides ? { ...base, ...cleanOverrides(script.styleOverrides) } : base;
 }
+
+export const TITLE_FONTS = ["inter", "playfair", "bebas", "nunito", "montserrat", "dmSerif"] as const;
+export const TITLE_SIZE = { s: 0.8, m: 1, l: 1.25, xl: 1.55 } as const;
+
+/** Keeps only valid title-style values (it comes from the browser). */
+export function cleanTitleStyle(x: unknown): import("./types").TitleStyle | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const t = x as Record<string, unknown>;
+  const hex = (v: unknown) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : undefined);
+  const out: import("./types").TitleStyle = {
+    size: typeof t.size === "string" && t.size in TITLE_SIZE ? (t.size as keyof typeof TITLE_SIZE) : undefined,
+    font: (TITLE_FONTS as readonly string[]).includes(t.font as string) ? (t.font as (typeof TITLE_FONTS)[number]) : undefined,
+    color: hex(t.color),
+    background: t.background === "none" ? "none" : hex(t.background),
+    upper: typeof t.upper === "boolean" ? t.upper : undefined,
+  };
+  const clean = Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
+  return Object.keys(clean).length ? clean : undefined;
+}

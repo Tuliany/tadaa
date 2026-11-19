@@ -3,6 +3,7 @@ import { handle, requireReel } from "@/lib/auth";
 import { getBrand } from "@/lib/db";
 import { saveReel } from "@/lib/db";
 import { getStoredSound, strip } from "@/lib/sounds";
+import { cleanTitleStyle } from "@/lib/styles";
 import { soundMoments } from "@/lib/templates";
 import type { Reel, ReelScript } from "@/lib/types";
 
@@ -40,6 +41,8 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
     }));
   }
   if (body.script && "sound" in body.script) body.script.sound = !!body.script.sound;
+
+  if (body.script && "titleStyle" in body.script) body.script.titleStyle = cleanTitleStyle(body.script.titleStyle);
 
   // Music and sound effects: only sounds imported into Tadaa (CC0); details come from our records.
   const vol = (v: unknown, d: number) => (typeof v === "number" && isFinite(v) ? Math.min(Math.max(v, 0), 1) : d);
