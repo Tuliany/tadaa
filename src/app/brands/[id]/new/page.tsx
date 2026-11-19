@@ -233,7 +233,13 @@ function NewReel() {
 
       <ErrorNote error={error} className="mt-6" />
 
-      <div className="mt-8 flex items-center justify-end gap-4">
+      <p className="mt-8 text-right text-xs text-ink/45">
+        {isTalk
+          ? "Captions are added from what's said. Music and sound effects can be added on the next page."
+          : "Next you can add a voiceover (your own or an AI voice), music and sound effects."}
+      </p>
+
+      <div className="mt-3 flex items-center justify-end gap-4">
         {needsTwo && <p className="text-sm text-ink/55">Select a before and an after photo</p>}
         {memeMissing && <p className="text-sm text-ink/55">{selected.length ? "Add a caption" : "Pick a clip"}</p>}
         {talkMissing && <p className="text-sm text-ink/55">Pick a video</p>}
