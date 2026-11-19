@@ -64,7 +64,10 @@ export async function listVoices(): Promise<AiVoice[]> {
     .map((v) => ({
       id: v.voice_id,
       name: v.name.split(/\s+-\s+/)[0],
-      description: [v.labels?.gender, v.labels?.age, v.labels?.descriptive ?? v.labels?.description, v.labels?.accent].filter(Boolean).join(" · "),
+      description: [v.labels?.gender, v.labels?.age, v.labels?.descriptive ?? v.labels?.description, v.labels?.accent]
+        .filter(Boolean)
+        .map((l) => l!.replace(/_/g, " "))
+        .join(" · "),
       preview: v.preview_url,
     }))
     .slice(0, 40);
