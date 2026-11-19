@@ -652,3 +652,29 @@ Schema: { "text": string }`,
   );
   return res.text;
 }
+
+// ---------- Onboarding ----------
+
+const describeSchema = z.object({ description: text(320, Infinity) });
+
+/** One or two sentences on what the business does and for whom, from its website (the owner can edit it). */
+export async function describeBusiness(site: { url: string; siteName: string; title: string; headline: string; description: string; text: string }) {
+  if (!aiEnabled()) return [site.headline, site.description].filter(Boolean).join(". ").slice(0, 300);
+  const res = await askJson(
+    "You describe small businesses in plain words, like the owner would in one breath. No marketing fluff, no superlatives.",
+    `Website: ${site.url}
+Name: ${site.siteName || site.title}
+Headline: ${site.headline}
+Meta description: ${site.description}
+Page text (excerpt):
+${site.text.slice(0, 4000)}
+
+Write 1–2 short sentences: what this business does and for whom (and where, if the site says). Write in the same language as the website. Only facts from the site.
+
+Schema: { "description": string }`,
+    describeSchema,
+    1200,
+    true,
+  );
+  return res.description;
+}

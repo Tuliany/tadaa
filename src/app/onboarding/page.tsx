@@ -39,6 +39,10 @@ export default function Onboarding() {
   const [description, setDescription] = useState("");
   const [reels, setReels] = useState("");
   const [language, setLanguage] = useState<Language>("en");
+  // "What do you do" written from the website: the text we filled in, and whether the person picked a language.
+  const [autoDesc, setAutoDesc] = useState<{ for: string; text: string } | null>(null);
+  const [describing, setDescribing] = useState(false);
+  const [languageTouched, setLanguageTouched] = useState(false);
   const [scan, setScan] = useState<Scan | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   // The brand as it's being written (streamed), shown until the final brand arrives.
@@ -54,6 +58,24 @@ export default function Onboarding() {
     return () => clearInterval(t);
   }, [stage]);
   const steps = ["Reading your pages…", "Finding what you sell…", "Learning how you talk…", "Picking your colours…", "Writing your brand brain…"];
+
+  /** Reads the website and fills in "What do you do" (only if it's empty or still our own suggestion). */
+  async function describe() {
+    const site = website.trim();
+    if (!/^[^\s]+\.[a-z]{2,}/i.test(site.replace(/^https?:\/\//, "")) || autoDesc?.for === site) return;
+    if (description.trim() && description !== autoDesc?.text) return;
+    setDescribing(true);
+    try {
+      const r = await api<{ description: string; language?: Language }>("/api/onboarding/describe", { method: "POST", json: { website: site } });
+      setDescription((d) => (!d.trim() || d === autoDesc?.text ? r.description : d));
+      setAutoDesc({ for: site, text: r.description });
+      if (r.language && !languageTouched) setLanguage(r.language);
+    } catch {
+      // Not fatal: the brand scan reads the site again on Start.
+    } finally {
+      setDescribing(false);
+    }
+  }
 
   async function start(e: React.FormEvent) {
     e.preventDefault();
@@ -94,18 +116,31 @@ export default function Onboarding() {
         <form onSubmit={start} className="card mt-8 p-6 space-y-6">
           <div>
             <label className="label" htmlFor="website">Your website</label>
-            <input id="website" className="input text-base" placeholder="yourbusiness.com" value={website} onChange={(e) => setWebsite(e.target.value)} />
+            <input
+              id="website"
+              className="input text-base"
+              placeholder="yourbusiness.com"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              onBlur={describe}
+            />
           </div>
           <div>
             <label className="label" htmlFor="desc">What do you do, and for whom?</label>
             <textarea
               id="desc"
               className="input min-h-24 text-base"
-              placeholder="E.g. We find and manage furnished housing for companies with staff on temporary projects across Sweden."
+              placeholder={describing ? "Reading your website…" : "E.g. We find and manage furnished housing for companies with staff on temporary projects across Sweden."}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-            <p className="text-xs text-ink/45 mt-1">A sentence or two is plenty. No website? This is enough on its own.</p>
+            <p className="text-xs text-ink/45 mt-1">
+              {describing
+                ? "✨ Reading your website…"
+                : autoDesc && description === autoDesc.text
+                  ? "Written from your website. Change anything you like."
+                  : "A sentence or two is plenty. No website? This is enough on its own."}
+            </p>
           </div>
           <div>
             <label className="label" htmlFor="reels">Reels you like (optional)</label>
@@ -119,7 +154,15 @@ export default function Onboarding() {
           </div>
           <div className="sm:w-1/2">
             <label className="label" htmlFor="lang">Language for your content</label>
-            <select id="lang" className="input" value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
+            <select
+              id="lang"
+              className="input"
+              value={language}
+              onChange={(e) => {
+                setLanguage(e.target.value as Language);
+                setLanguageTouched(true);
+              }}
+            >
               {Object.entries(LANGUAGES).map(([code, label]) => (
                 <option key={code} value={code}>{label}</option>
               ))}
