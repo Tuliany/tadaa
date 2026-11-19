@@ -178,6 +178,8 @@ export interface Slide {
   clipStart?: number;
   /** Meme only: where the clip ends (seconds). */
   clipEnd?: number;
+  /** Where the slide's text sits (centre, as fractions of width and height), when moved by hand. */
+  pos?: { x: number; y: number };
 }
 
 export interface ReelScript {
@@ -190,6 +192,8 @@ export interface ReelScript {
   referenceId?: string;
   /** Meme / Talking video: the customer's own look for the title (top caption). */
   titleStyle?: TitleStyle;
+  /** Where the hook / title and the end-card text sit, when moved by hand (centre, fractions). */
+  textPos?: { hook?: { x: number; y: number }; cta?: { x: number; y: number } };
   /** Where the trial watermark sits (centre, as fractions of width and height); top right when unset. */
   watermarkPos?: { x: number; y: number };
   hook: string;
@@ -371,6 +375,8 @@ export interface ReelEditHooks {
   onSelect: (field: EditField, value: string, rect: DOMRect) => void;
   /** The watermark was dragged to a new spot. */
   onWatermark: (pos: { x: number; y: number }) => void;
+  /** A text was dragged to a new spot. */
+  onMove: (field: EditField, pos: { x: number; y: number }) => void;
 }
 
 export interface ReelRenderProps {

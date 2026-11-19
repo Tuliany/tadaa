@@ -7,6 +7,15 @@ import { cleanTitleStyle } from "@/lib/styles";
 import { soundMoments } from "@/lib/templates";
 import type { Reel, ReelScript } from "@/lib/types";
 
+/** A text position (centre, fractions of the frame), kept inside the frame; anything else is dropped. */
+function cleanPos(p: unknown): { x: number; y: number } | undefined {
+  if (!p || typeof p !== "object") return undefined;
+  const { x, y } = p as { x?: unknown; y?: unknown };
+  if (typeof x !== "number" || typeof y !== "number" || !isFinite(x) || !isFinite(y)) return undefined;
+  const r = (v: number, lo: number, hi: number) => Math.round(Math.min(Math.max(v, lo), hi) * 1000) / 1000;
+  return { x: r(x, 0.1, 0.9), y: r(y, 0.05, 0.95) };
+}
+
 export const GET = handle(async (_req: Request, ctx: RouteContext<"/api/reels/[id]">) => {
   const { reel } = await requireReel((await ctx.params).id);
   return Response.json(reel);
@@ -45,8 +54,15 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
       mediaId: typeof x.mediaId === "string" && own.has(x.mediaId) ? x.mediaId : undefined,
       clipStart: n(x.clipStart),
       clipEnd: n(x.clipEnd),
+      pos: cleanPos(x.pos),
     }));
     slideMedia = body.script.slides.map((x) => x.mediaId).filter((x): x is string => !!x);
+  }
+  if (body.script && "textPos" in body.script) {
+    const t = body.script.textPos as Record<string, unknown> | null | undefined;
+    const hook = cleanPos(t?.hook);
+    const cta = cleanPos(t?.cta);
+    body.script.textPos = hook || cta ? { ...(hook ? { hook } : {}), ...(cta ? { cta } : {}) } : undefined;
   }
   if (body.script && "watermarkPos" in body.script) {
     const p = body.script.watermarkPos as { x?: unknown; y?: unknown } | null | undefined;

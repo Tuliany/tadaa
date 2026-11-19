@@ -97,20 +97,111 @@ function Letterbox({ s }: { s: StyleSpec }) {
   );
 }
 
-/** Preview only: click a text to edit it (the player shows an editor on top). Nothing changes in renders. */
+/** Preview only: marks a text as editable (hover outline). Clicks and drags are handled by <Placed>. */
 function editProps(props: ReelRenderProps, field: EditField, value: string): React.HTMLAttributes<HTMLDivElement> | undefined {
+  void value;
+  if (!props.edit) return undefined;
+  return { className: "tadaa-editable", title: "Click to edit · drag to move", style: { cursor: "move", pointerEvents: "auto", touchAction: "none" }, ...{ "data-text": field } };
+}
+
+type Pos = { x: number; y: number };
+const clampPos = (p: Pos): Pos => ({ x: Math.min(Math.max(p.x, 0.1), 0.9), y: Math.min(Math.max(p.y, 0.05), 0.95) });
+
+/** Where a text was moved to by hand, if anywhere. */
+function posOf(props: ReelRenderProps, field: EditField): Pos | undefined {
+  if (field === "hook") return props.script.textPos?.hook;
+  if (field === "cta") return props.script.textPos?.cta;
+  return props.script.slides[Number(field.slice(6))]?.pos;
+}
+
+/**
+ * Places a text: at its default spot (`fallback`, or in the normal flow when `inline`), or where it was
+ * dragged to. In the preview a click edits it and a drag moves it; renders just place it.
+ */
+function Placed({
+  props,
+  field,
+  value,
+  fallback,
+  inline = false,
+  children,
+}: {
+  props: ReelRenderProps;
+  field: EditField;
+  value: string;
+  fallback?: React.CSSProperties;
+  inline?: boolean;
+  children: React.ReactNode;
+}) {
+  const [drag, setDrag] = React.useState<Pos | null>(null);
+  const start = React.useRef<{ x: number; y: number; from: Pos; root: DOMRect; moved: boolean } | null>(null);
+  const pos = drag ?? posOf(props, field);
   const edit = props.edit;
-  if (!edit) return undefined;
-  return {
-    className: "tadaa-editable",
-    title: "Click to edit",
-    style: { cursor: "text", pointerEvents: "auto" },
-    onPointerDown: (e) => e.stopPropagation(),
-    onClick: (e) => {
-      e.stopPropagation();
-      edit.onSelect(field, value, e.currentTarget.getBoundingClientRect());
-    },
-  };
+  // Hidden (e.g. captions replace the slide text) wherever the text sits.
+  const hidden = fallback?.display === "none";
+
+  const handlers: React.HTMLAttributes<HTMLDivElement> = edit
+    ? {
+        onPointerDown: (e) => {
+          const text = (e.target as HTMLElement).closest("[data-text]") as HTMLElement | null;
+          const root = text?.closest("[data-reel-root]")?.getBoundingClientRect();
+          if (!text || !root) return;
+          e.stopPropagation();
+          text.setPointerCapture(e.pointerId);
+          const r = text.getBoundingClientRect();
+          start.current = { x: e.clientX, y: e.clientY, root, moved: false, from: { x: (r.left + r.width / 2 - root.left) / root.width, y: (r.top + r.height / 2 - root.top) / root.height } };
+        },
+        onPointerMove: (e) => {
+          const st = start.current;
+          if (!st) return;
+          if (!st.moved && Math.hypot(e.clientX - st.x, e.clientY - st.y) < 6) return;
+          st.moved = true;
+          setDrag(clampPos({ x: st.from.x + (e.clientX - st.x) / st.root.width, y: st.from.y + (e.clientY - st.y) / st.root.height }));
+        },
+        onPointerUp: (e) => {
+          const st = start.current;
+          start.current = null;
+          if (!st) return;
+          e.stopPropagation();
+          if (st.moved && drag) {
+            edit.onMove(field, drag);
+            setTimeout(() => setDrag(null), 400);
+          } else {
+            const text = (e.target as HTMLElement).closest("[data-text]") as HTMLElement | null;
+            if (text) edit.onSelect(field, value, text.getBoundingClientRect());
+          }
+        },
+        onClick: (e) => e.stopPropagation(),
+      }
+    : {};
+
+  if (hidden) return null;
+  if (pos) {
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", opacity: fallback?.opacity }}>
+        <div
+          {...handlers}
+          style={{
+            position: "absolute",
+            left: `${pos.x * 100}%`,
+            top: `${pos.y * 100}%`,
+            transform: "translate(-50%, -50%)",
+            width: 940,
+            display: "flex",
+            justifyContent: "center",
+          }}
+        >
+          {children}
+        </div>
+      </AbsoluteFill>
+    );
+  }
+  if (inline) return <div {...handlers} style={{ display: "contents" }}>{children}</div>;
+  return (
+    <AbsoluteFill {...handlers} style={fallback}>
+      {children}
+    </AbsoluteFill>
+  );
 }
 
 /** Styled text: animation, font, case and treatment (pill, box, captions outline, lower-third bar, sticker). */
@@ -232,7 +323,7 @@ function Hook({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
     <AbsoluteFill style={{ background: bg }}>
       <MediaLayer media={first} s={s} reverse boost={0.05} />
       {first && <Shade s={s} extra={0.1} />}
-      <AbsoluteFill style={{ ...placementStyle(s, true), display: hideText ? "none" : undefined }}>
+      <Placed props={props} field="hook" value={script.hook} fallback={{ ...placementStyle(s, true), display: hideText ? "none" : undefined }}>
         <StyledText
           s={s}
           size={Math.round(hookSize(script.hook.length) * Math.min(s.size, 1.25))}
@@ -243,7 +334,7 @@ function Hook({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
         >
           {script.hook}
         </StyledText>
-      </AbsoluteFill>
+      </Placed>
       <Letterbox s={s} />
     </AbsoluteFill>
   );
@@ -265,7 +356,7 @@ function SlideCard({ slide, index, props, s }: { slide: Slide; index: number; pr
       <AbsoluteFill style={{ backgroundColor: bg }}>
         <MediaLayer media={m} s={s} reverse={index % 2 === 1} clipStart={slide.clipStart} sound={!!script.sound} />
         {m && <Shade s={s} extra={classic && isTips ? 0.2 : 0} />}
-        <AbsoluteFill style={{ ...(place as React.CSSProperties), display: captionsOn(props) ? "none" : undefined }}>
+        <Placed props={props} field={`slide:${index}`} value={slide.text} fallback={{ ...(place as React.CSSProperties), display: captionsOn(props) ? "none" : undefined }}>
           <StyledText
             s={s}
             size={size}
@@ -277,7 +368,7 @@ function SlideCard({ slide, index, props, s }: { slide: Slide; index: number; pr
           >
             {slide.text}
           </StyledText>
-        </AbsoluteFill>
+        </Placed>
         <Letterbox s={s} />
       </AbsoluteFill>
     </Enter>
@@ -330,7 +421,7 @@ function BeforeAfter({ props, s, slideFrames }: { props: ReelRenderProps; s: Sty
       {label("AFTER", reveal >= 50)}
       <Shade s={{ ...full, shade: Math.max(s.shade, 0.45) }} />
       <Sequence durationInFrames={slideFrames - 10} layout="none">
-        <AbsoluteFill style={textPlace}>
+        <Placed props={props} field="slide:0" value={script.slides[0]?.text ?? ""} fallback={textPlace}>
           <StyledText
             s={full}
             size={Math.round(72 * s.size)}
@@ -341,10 +432,10 @@ function BeforeAfter({ props, s, slideFrames }: { props: ReelRenderProps; s: Sty
           >
             {script.slides[0]?.text ?? ""}
           </StyledText>
-        </AbsoluteFill>
+        </Placed>
       </Sequence>
       <Sequence from={wipeStart + 24} layout="none">
-        <AbsoluteFill style={textPlace}>
+        <Placed props={props} field="slide:1" value={script.slides[1]?.text ?? ""} fallback={textPlace}>
           <StyledText
             s={full}
             size={Math.round(72 * s.size)}
@@ -355,7 +446,7 @@ function BeforeAfter({ props, s, slideFrames }: { props: ReelRenderProps; s: Sty
           >
             {script.slides[1]?.text ?? ""}
           </StyledText>
-        </AbsoluteFill>
+        </Placed>
       </Sequence>
       <Letterbox s={s} />
     </AbsoluteFill>
@@ -387,9 +478,11 @@ function EndCard({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
           {s.upper ? brand.name.toUpperCase() : brand.name}
         </div>
       )}
-      <StyledText s={plain} size={Math.round(76 * Math.min(s.size, 1.2))} color={fg} accent={brand.colors.primary} delay={8} edit={editProps(props, "cta", script.cta)}>
-        {script.cta}
-      </StyledText>
+      <Placed props={props} field="cta" value={script.cta} inline>
+        <StyledText s={plain} size={Math.round(76 * Math.min(s.size, 1.2))} color={fg} accent={brand.colors.primary} delay={8} edit={editProps(props, "cta", script.cta)}>
+          {script.cta}
+        </StyledText>
+      </Placed>
       {brand.logoUrl && (
         <StyledText s={plain} size={48} color={fg} accent={brand.colors.primary} delay={14}>
           {brand.name}
@@ -414,52 +507,8 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
   const still = { ...s, motion: 0, grade: s.grade, framed: false };
   return (
     <AbsoluteFill style={{ background: areaBg }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 600,
-          padding: "150px 70px 40px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          {...editProps(props, "hook", caption)}
-          style={{
-            ...editProps(props, "hook", caption)?.style,
-            fontFamily: fontOf({ ...s, font: t?.font ?? s.font }),
-            fontWeight: (t?.font ?? s.font) === "bebas" || (t?.font ?? s.font) === "dmSerif" ? 400 : Math.max(s.weight, 700),
-            fontSize: Math.round(size * TITLE_SIZE[t?.size ?? "m"]),
-            lineHeight: 1.15,
-            color: t?.color ?? readableOn(areaBg),
-            textAlign: "center",
-            letterSpacing: -0.5,
-          }}
-        >
-          {(t?.upper ?? s.upper) ? caption.toUpperCase() : caption}
-        </div>
-      </div>
       <div style={{ position: "absolute", top: 600, left: 0, right: 0, bottom: 0, overflow: "hidden", background: "#000" }}>
         <MediaLayer media={clip} s={still} clipStart={slide?.clipStart ?? 0} sound={script.sound !== false} />
-        {slide?.text && frame >= punchAt && (
-          <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: "0 60px 170px" }}>
-            <Sequence from={punchAt} layout="none">
-              <StyledText
-                s={{ ...s, treatment: "outline", wordByWord: false, transition: "pop", upper: true }}
-                size={80}
-                color="#ffffff"
-                accent={brand.colors.primary}
-                edit={editProps(props, "slide:0", slide.text)}
-              >
-                {slide.text}
-              </StyledText>
-            </Sequence>
-          </AbsoluteFill>
-        )}
         <div
           style={{
             position: "absolute",
@@ -477,6 +526,44 @@ function Meme({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
           {brand.name}
         </div>
       </div>
+      {/* Caption and punchline sit at full-frame level, so a dragged position means the same everywhere. */}
+      <Placed
+        props={props}
+        field="hook"
+        value={caption}
+        fallback={{ bottom: "auto", height: 600, padding: "150px 70px 40px", alignItems: "center", justifyContent: "center" }}
+      >
+        <div
+          {...editProps(props, "hook", caption)}
+          style={{
+            ...editProps(props, "hook", caption)?.style,
+            fontFamily: fontOf({ ...s, font: t?.font ?? s.font }),
+            fontWeight: (t?.font ?? s.font) === "bebas" || (t?.font ?? s.font) === "dmSerif" ? 400 : Math.max(s.weight, 700),
+            fontSize: Math.round(size * TITLE_SIZE[t?.size ?? "m"]),
+            lineHeight: 1.15,
+            color: t?.color ?? readableOn(areaBg),
+            textAlign: "center",
+            letterSpacing: -0.5,
+          }}
+        >
+          {(t?.upper ?? s.upper) ? caption.toUpperCase() : caption}
+        </div>
+      </Placed>
+      {slide?.text && frame >= punchAt && (
+        <Placed props={props} field="slide:0" value={slide.text} fallback={{ justifyContent: "flex-end", alignItems: "center", padding: "0 60px 170px" }}>
+          <Sequence from={punchAt} layout="none">
+            <StyledText
+              s={{ ...s, treatment: "outline", wordByWord: false, transition: "pop", upper: true }}
+              size={80}
+              color="#ffffff"
+              accent={brand.colors.primary}
+              edit={editProps(props, "slide:0", slide.text)}
+            >
+              {slide.text}
+            </StyledText>
+          </Sequence>
+        </Placed>
+      )}
     </AbsoluteFill>
   );
 }
@@ -540,7 +627,7 @@ function Watermark({ props }: { props: ReelRenderProps }) {
 }
 
 export const Reel: React.FC<ReelRenderProps> = (props) => (
-  <AbsoluteFill>
+  <AbsoluteFill data-reel-root="">
     <ReelBody {...props} />
     {captionsOn(props) && (
       <Sequence durationInFrames={Math.ceil((props.script.voice!.duration + 0.5) * 30)} layout="none">
@@ -664,9 +751,9 @@ function Talk({ props, s, clipFrames }: { props: ReelRenderProps; s: StyleSpec; 
       <MediaLayer media={clip} s={still} clipStart={slide?.clipStart ?? 0} sound />
       <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0) 65%, rgba(0,0,0,0.35) 100%)" }} />
       {script.hook && frame < 110 && (
-        <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "center", padding: "200px 70px 0", opacity: titleOut }}>
+        <Placed props={props} field="hook" value={script.hook} fallback={{ justifyContent: "flex-start", alignItems: "center", padding: "200px 70px 0", opacity: titleOut }}>
           <TalkTitle text={script.hook} s={s} accent={brand.colors.primary} t={script.titleStyle} edit={editProps(props, "hook", script.hook)} />
-        </AbsoluteFill>
+        </Placed>
       )}
       {voice?.captions && voice.words.length > 0 && frame < clipFrames && (
         <Captions words={voice.words} s={s} accent={brand.colors.primary} bottom={380} offset={slide?.clipStart ?? 0} />

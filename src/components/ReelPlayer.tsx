@@ -15,11 +15,13 @@ export default function ReelPlayer({
   autoPlay = true,
   onEditText,
   onMoveWatermark,
+  onMoveText,
 }: {
   props: ReelRenderProps;
   autoPlay?: boolean;
   onEditText?: (field: EditField, value: string) => void;
   onMoveWatermark?: (pos: { x: number; y: number }) => void;
+  onMoveText?: (field: EditField, pos: { x: number; y: number } | null) => void;
 }) {
   const boxId = useId();
   const player = useRef<PlayerRef>(null);
@@ -40,9 +42,10 @@ export default function ReelPlayer({
               setSel({ field, value, original: value, top, left, width, height: Math.max(rect.height + 16, 56) });
             },
             onWatermark: (pos: { x: number; y: number }) => onMoveWatermark?.(pos),
+            onMove: (field: EditField, pos: { x: number; y: number }) => onMoveText?.(field, pos),
           }
         : undefined,
-    [editable, onEditText, onMoveWatermark, boxId],
+    [editable, onEditText, onMoveWatermark, onMoveText, boxId],
   );
 
   // Pause while a text is being edited.
@@ -50,6 +53,7 @@ export default function ReelPlayer({
     if (sel) player.current?.pause();
   }, [sel]);
 
+  const moved = !!props.script.textPos?.hook || !!props.script.textPos?.cta || props.script.slides.some((x) => x.pos);
   const inputProps = useMemo(() => (edit ? { ...props, edit } : props), [props, edit]);
 
   // Esc cancels; everything else (Enter, clicking away) saves. Both go through blur, so it saves once.
@@ -106,8 +110,13 @@ export default function ReelPlayer({
       )}
       {editable && !sel && (
         <p className="mt-2 text-center text-xs text-ink/45">
-          {onEditText ? "Click a text in the video to change it." : ""}
-          {props.watermark && onMoveWatermark ? " Drag the Tadaa badge to move it." : ""}
+          {onEditText ? "Click a text in the video to change it, drag it to move it." : ""}
+          {props.watermark && onMoveWatermark ? " The Tadaa badge can be dragged too." : ""}
+          {onMoveText && moved && (
+            <button className="ml-1 font-semibold text-coral" onClick={() => onMoveText("hook", null)}>
+              Reset text positions
+            </button>
+          )}
         </p>
       )}
     </div>

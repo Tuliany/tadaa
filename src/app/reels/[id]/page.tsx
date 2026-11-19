@@ -112,6 +112,21 @@ export default function ReelPage() {
     }
   };
 
+  /** A text was dragged in the video (null = put every text back in its default spot). */
+  const moveText = (field: EditField, pos: { x: number; y: number } | null) => {
+    const current = editing ?? reel?.script;
+    if (!current) return;
+    if (pos === null) {
+      patchScript({ textPos: null as unknown as undefined, slides: current.slides.map((x) => ({ ...x, pos: undefined })) });
+      return;
+    }
+    if (field === "hook" || field === "cta") patchScript({ textPos: { ...current.textPos, [field]: pos } });
+    else {
+      const i = Number(field.slice(6));
+      patchScript({ slides: current.slides.map((x, j) => (j === i ? { ...x, pos } : x)) });
+    }
+  };
+
   const moveWatermark = (pos: { x: number; y: number }) =>
     run("save", async () => setReel(await api<Reel>(`/api/reels/${id}`, { method: "PATCH", json: { script: { watermarkPos: pos } } })));
 
@@ -160,7 +175,7 @@ export default function ReelPage() {
 
       <div className="mt-8 grid md:grid-cols-[340px_minmax(0,1fr)] gap-10">
         <div>
-          <ReelPlayer props={props} onEditText={editText} onMoveWatermark={moveWatermark} />
+          <ReelPlayer props={props} onEditText={editText} onMoveWatermark={moveWatermark} onMoveText={moveText} />
           <div className="mt-4 grid gap-2">
             {reel.status === "approved" ? (
               <>
