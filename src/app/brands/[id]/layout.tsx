@@ -29,7 +29,7 @@ export default function BrandShell({ children }: LayoutProps<"/brands/[id]">) {
 
   const base = `/brands/${id}`;
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8">
       <aside className="mb-6 lg:mb-0">
         <div className="card p-3 lg:sticky lg:top-20">
           <Link href="/brands" className="flex items-center gap-3 rounded-xl p-2 hover:bg-black/5">

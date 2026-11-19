@@ -62,7 +62,7 @@ export default function ClipTrimmer({
   };
 
   return (
-    <div className="grid sm:grid-cols-[150px_1fr] gap-4 items-center">
+    <div className="grid sm:grid-cols-[150px_minmax(0,1fr)] gap-4 items-center">
       <div className="relative">
         <video
           ref={ref}

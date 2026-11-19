@@ -133,7 +133,7 @@ export default function ReelPage() {
       </div>
       <p className="text-sm text-ink/50">{TEMPLATES[reel.script.template].name}</p>
 
-      <div className="mt-8 grid md:grid-cols-[340px_1fr] gap-10">
+      <div className="mt-8 grid md:grid-cols-[340px_minmax(0,1fr)] gap-10">
         <div>
           <ReelPlayer props={props} />
           <div className="mt-4 grid gap-2">
@@ -160,7 +160,7 @@ export default function ReelPage() {
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <ErrorNote error={error} />
 
           <div className="card p-5">
@@ -289,7 +289,7 @@ export default function ReelPage() {
 
 function TextRow({ label, value, editing, onChange }: { label: string; value: string; editing: boolean; onChange: (v: string) => void }) {
   return (
-    <div className="grid grid-cols-[80px_1fr] items-center gap-3">
+    <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
       <span className="text-xs font-semibold uppercase tracking-wide text-ink/40">{label}</span>
       {editing ? <input className="input py-1.5" value={value} onChange={(e) => onChange(e.target.value)} /> : <p className="text-sm font-medium">{value}</p>}
     </div>
