@@ -193,7 +193,19 @@ export interface ReelScript {
   /** Meme / Talking video: the customer's own look for the title (top caption). */
   titleStyle?: TitleStyle;
   /** The last screen (logo, call to action, brand name): background picture, what to show, or removed. */
-  endCard?: { hidden?: boolean; mediaId?: string; logo?: boolean; name?: boolean };
+  endCard?: {
+    hidden?: boolean;
+    /** Background picture or video (muted). */
+    mediaId?: string;
+    logo?: boolean;
+    name?: boolean;
+    /** A short line under the call to action. */
+    slogan?: string;
+    /** Shown small at the bottom, e.g. "solnord.se". */
+    website?: string;
+    /** Instagram handle without "@". */
+    handle?: string;
+  };
   /** Where the hook / title and the end-card text sit, when moved by hand (centre, fractions). */
   textPos?: { hook?: { x: number; y: number }; cta?: { x: number; y: number } };
   /** Where the trial watermark sits (centre, as fractions of width and height); top right when unset. */

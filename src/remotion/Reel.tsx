@@ -812,6 +812,11 @@ function EndCard({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
             {script.cta}
           </StyledText>
         </Placed>
+        {ec?.slogan && (
+          <StyledText s={plain} size={46} color={fg} accent={brand.colors.primary} delay={12}>
+            {ec.slogan}
+          </StyledText>
+        )}
         {showLogo && showName && (
           <StyledText
             s={plain}
@@ -824,6 +829,26 @@ function EndCard({ props, s }: { props: ReelRenderProps; s: StyleSpec }) {
           </StyledText>
         )}
       </AbsoluteFill>
+      {(ec?.website || ec?.handle) && (
+        <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: "0 60px 150px" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 22,
+              flexWrap: "wrap",
+              justifyContent: "center",
+              fontFamily: FONTS.inter,
+              fontWeight: 700,
+              fontSize: 36,
+              color: fg,
+              opacity: interpolate(frame, [16, 30], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }),
+            }}
+          >
+            {ec.website && <span style={{ border: `3px solid ${fg}`, borderRadius: 999, padding: "10px 26px" }}>{ec.website}</span>}
+            {ec.handle && <span style={{ border: `3px solid ${fg}`, borderRadius: 999, padding: "10px 26px" }}>@{ec.handle}</span>}
+          </div>
+        </AbsoluteFill>
+      )}
     </AbsoluteFill>
   );
 }

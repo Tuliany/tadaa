@@ -177,6 +177,49 @@ export default function SlidesCard({
               </label>
             </div>
           )}
+          {!ec.hidden && (
+            <div className="mt-3 space-y-2 pl-12">
+              {(
+                [
+                  ["slogan", "Slogan", brand.headline || "A short line under the call to action"],
+                  ["website", "Website", brand.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || "yourbusiness.com"],
+                  ["handle", "Instagram", brand.instagram ? `@${brand.instagram.replace(/^@/, "")}` : "@yourbusiness"],
+                ] as const
+              ).map(([key, label, placeholder]) => (
+                <label key={key} className="grid grid-cols-[72px_minmax(0,1fr)] items-center gap-2 text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-ink/40">{label}</span>
+                  <input
+                    key={ec[key] ?? ""}
+                    className="input py-1.5"
+                    defaultValue={key === "handle" && ec.handle ? `@${ec.handle}` : (ec[key] ?? "")}
+                    placeholder={placeholder}
+                    disabled={saving}
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      const old = key === "handle" && ec.handle ? `@${ec.handle}` : (ec[key] ?? "");
+                      if (v !== old) setEnd({ [key]: v || undefined });
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                  />
+                </label>
+              ))}
+              {!ec.slogan && !ec.website && !ec.handle && (brand.headline || brand.website || brand.instagram) && (
+                <button
+                  className="text-sm font-semibold text-coral"
+                  disabled={saving}
+                  onClick={() =>
+                    setEnd({
+                      slogan: brand.headline || undefined,
+                      website: brand.website?.replace(/^https?:\/\//, "").replace(/\/$/, "") || undefined,
+                      handle: brand.instagram?.replace(/^@/, "") || undefined,
+                    })
+                  }
+                >
+                  Fill in from the brand
+                </button>
+              )}
+            </div>
+          )}
           {picking === "end" && picker}
         </li>
       </ul>

@@ -7,6 +7,13 @@ import { cleanTitleStyle } from "@/lib/styles";
 import { soundMoments } from "@/lib/templates";
 import type { Reel, ReelScript } from "@/lib/types";
 
+/** A trimmed one-line string, or undefined when empty. */
+function str(v: unknown, max: number) {
+  if (typeof v !== "string") return undefined;
+  const t = v.replace(/\s+/g, " ").trim().slice(0, max);
+  return t || undefined;
+}
+
 /** A text position (centre, fractions of the frame), kept inside the frame; anything else is dropped. */
 function cleanPos(p: unknown): { x: number; y: number } | undefined {
   if (!p || typeof p !== "object") return undefined;
@@ -66,6 +73,9 @@ export const PATCH = handle(async (req: Request, ctx: RouteContext<"/api/reels/[
       ...(own ? { mediaId: e.mediaId as string } : {}),
       ...(e.logo === false ? { logo: false } : {}),
       ...(e.name === false ? { name: false } : {}),
+      ...(str(e.slogan, 90) ? { slogan: str(e.slogan, 90) } : {}),
+      ...(str(e.website, 60) ? { website: str(e.website, 60)!.replace(/^https?:\/\//i, "").replace(/\/$/, "") } : {}),
+      ...(str(e.handle, 40) ? { handle: str(e.handle, 40)!.replace(/^@/, "").replace(/\s+/g, "") } : {}),
     };
     body.script.endCard = Object.keys(ec).length ? ec : undefined;
   }
